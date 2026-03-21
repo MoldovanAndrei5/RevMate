@@ -7,7 +7,7 @@ import '../models/car.dart';
 import 'package:http/http.dart' as http;
 
 class ApiCarService {
-  static final String baseUrl = "${dotenv.env["HOST"]}:${dotenv.env["PORT"]}";
+  static final String baseUrl = "${dotenv.env["BASE_URL"]}";
 
   Future<ApiResponse<List<Car>>> getAllCars() async {
     try {

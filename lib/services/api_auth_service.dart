@@ -4,7 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class ApiAuthService {
-  static final String baseUrl = "${dotenv.env["HOST"]}:${dotenv.env["PORT"]}";
+  static final String baseUrl = "${dotenv.env["BASE_URL"]}";
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {

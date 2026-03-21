@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class ApiHelperService {
-  static final String baseUrl = "${dotenv.env["HOST"]}:${dotenv.env["PORT"]}";
+  static final String baseUrl = "${dotenv.env["BASE_URL"]}";
 
   Future<bool> isServerOnline() async {
     AppLogger.info("Checking if server is online...");

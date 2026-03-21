@@ -6,7 +6,7 @@ import 'package:car_maintenance_tracker/utils/api_response.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiTaskService {
-  static final String baseUrl = "${dotenv.env["HOST"]}:${dotenv.env["PORT"]}";
+  static final String baseUrl = "${dotenv.env["BASE_URL"]}";
 
   Future<ApiResponse<List<MaintenanceTask>>> getAllTasks() async {
     try {
