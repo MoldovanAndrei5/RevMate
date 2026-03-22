@@ -11,7 +11,7 @@ class ApiHelperService {
       final response = await http.get(
         Uri.parse("$baseUrl/health"),
         headers: {"Content-Type": "application/json"},
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       AppLogger.info("Server is online");
       return response.statusCode == 200;
     }

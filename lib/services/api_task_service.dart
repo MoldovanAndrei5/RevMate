@@ -5,6 +5,8 @@ import 'package:car_maintenance_tracker/services/api_client.dart';
 import 'package:car_maintenance_tracker/utils/api_response.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../utils/app_logger.dart';
+
 class ApiTaskService {
   static final String baseUrl = "${dotenv.env["BASE_URL"]}";
 
@@ -12,7 +14,7 @@ class ApiTaskService {
     try {
       final response = await ApiClient.get(
         Uri.parse("$baseUrl/tasks/"),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
         return ApiResponse(data.map((item) => MaintenanceTask.fromMap(item)).toList(), response.statusCode);
@@ -28,7 +30,7 @@ class ApiTaskService {
     try {
       final response = await ApiClient.get(
         Uri.parse("$baseUrl/tasks/$taskUuid"),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return ApiResponse(MaintenanceTask.fromMap(jsonDecode(response.body)), response.statusCode);
       }
@@ -43,7 +45,7 @@ class ApiTaskService {
     try {
       final response = await ApiClient.get(
         Uri.parse("$baseUrl/tasks/car/$carUuid"),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
         return ApiResponse(data.map((item) => MaintenanceTask.fromMap(item)).toList(), response.statusCode);
@@ -60,7 +62,8 @@ class ApiTaskService {
       final response = await ApiClient.post(
         Uri.parse("$baseUrl/tasks/"),
         body: jsonEncode(task.toMap()),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
+      AppLogger.info("Raw response: ${response.body}");
       if (response.statusCode == 200 || response.statusCode == 201) {
         return ApiResponse(MaintenanceTask.fromMap(jsonDecode(response.body)), response.statusCode);
       }
@@ -76,7 +79,7 @@ class ApiTaskService {
       final response = await ApiClient.put(
         Uri.parse("$baseUrl/tasks/${task.taskUuid}"),
         body: jsonEncode(task.toMap()),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return ApiResponse(MaintenanceTask.fromMap(jsonDecode(response.body)), response.statusCode);
       }
@@ -91,7 +94,7 @@ class ApiTaskService {
     try {
       final response = await ApiClient.delete(
         Uri.parse("$baseUrl/tasks/$taskUuid"),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return ApiResponse(jsonDecode(response.body), response.statusCode);
       }

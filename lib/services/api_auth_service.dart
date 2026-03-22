@@ -15,7 +15,7 @@ class ApiAuthService {
           "email": email,
           "password": password,
         })
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -38,7 +38,7 @@ class ApiAuthService {
         "email": email,
         "password": password,
       })
-    ).timeout(const Duration(seconds: 3));
+    ).timeout(const Duration(seconds: 15));
     return response.statusCode == 200;
   }
 
@@ -48,7 +48,7 @@ class ApiAuthService {
       body: jsonEncode({
         "password": password,
       })
-    ).timeout(const Duration(seconds: 3));
+    ).timeout(const Duration(seconds: 15));
     return response.statusCode == 200;
   }
 }

@@ -33,7 +33,7 @@ class SyncService extends ChangeNotifier {
         await _checkServerStatus();
       }
     });
-    _timer = Timer.periodic(const Duration(seconds: 30), (timer) => _checkServerStatus());
+    _timer = Timer.periodic(const Duration(seconds: 120), (timer) => _checkServerStatus());
   }
 
   Future<void> stopSync() async {

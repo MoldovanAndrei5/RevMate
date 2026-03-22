@@ -72,17 +72,17 @@ class MaintenanceTask {
 
   factory MaintenanceTask.fromMap(Map<String, Object?> map) {
     return MaintenanceTask(
-      taskUuid: map["task_uuid"] != null ? map["task_uuid"] as String: "0",
+      taskUuid: map["task_uuid"] != null ? map["task_uuid"] as String : "0",
       carUuid: map["car_uuid"] as String,
       title: map["title"] as String,
       category: map["category"] as String,
-      mileage: map["mileage"] as int?,
-      cost: map["cost"] as double?,
-      scheduledDate: map["scheduled_date"] == null ? null : DateTime.fromMillisecondsSinceEpoch(map["scheduled_date"] as int),
-      completedDate: map["completed_date"] == null ? null : DateTime.fromMillisecondsSinceEpoch(map["completed_date"] as int),
+      mileage: map["mileage"] == null ? null : (map["mileage"] as num).toInt(),
+      cost: map["cost"] == null ? null : double.parse(map["cost"].toString()),
+      scheduledDate: map["scheduled_date"] == null ? null : DateTime.fromMillisecondsSinceEpoch((map["scheduled_date"] as num).toInt()),
+      completedDate: map["completed_date"] == null ? null : DateTime.fromMillisecondsSinceEpoch((map["completed_date"] as num).toInt()),
       notes: map["notes"] as String?,
-      isSynced: map['is_synced'] != null ? map['is_synced'] as int : 1,
-      isDeleted: map['is_deleted'] != null ? map['is_deleted'] as int : 0,
+      isSynced: map['is_synced'] != null ? (map['is_synced'] as num).toInt() : 1,
+      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : 0,
     );
   }
 }

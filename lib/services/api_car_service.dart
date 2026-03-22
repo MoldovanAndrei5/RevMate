@@ -13,7 +13,7 @@ class ApiCarService {
     try {
       final response = await ApiClient.get(
         Uri.parse("$baseUrl/cars/"),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
         return ApiResponse(data.map((item) => Car.fromMap(item)).toList(), response.statusCode);
@@ -30,7 +30,7 @@ class ApiCarService {
     try {
       response = await ApiClient.get(
         Uri.parse("$baseUrl/cars/$carUuid"),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return ApiResponse(Car.fromMap(jsonDecode(response.body)), response.statusCode);
       }
@@ -46,7 +46,7 @@ class ApiCarService {
       final response = await ApiClient.post(
         Uri.parse("$baseUrl/cars/"),
         body: jsonEncode(car.toMap()),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200 || response.statusCode == 201) {
         return ApiResponse(Car.fromMap(jsonDecode(response.body)), response.statusCode);
       }
@@ -62,7 +62,7 @@ class ApiCarService {
       final response = await ApiClient.put(
         Uri.parse("$baseUrl/cars/${car.carUuid}"),
         body: jsonEncode(car.toMap()),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return ApiResponse(Car.fromMap(jsonDecode(response.body)), response.statusCode);
       }
@@ -77,7 +77,7 @@ class ApiCarService {
     try {
       final response = await ApiClient.delete(
         Uri.parse("$baseUrl/cars/$carUuid"),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return ApiResponse(jsonDecode(response.body), response.statusCode);
       }
