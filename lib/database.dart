@@ -36,7 +36,7 @@ class AppDatabase {
         vin TEXT,
         mileage INTEGER,
         license_plate TEXT,
-        image_path TEXT,
+        image_key TEXT,
         is_synced INTEGER DEFAULT 0, -- 0 = Not Synced, 1 = Synced
         is_deleted INTEGER DEFAULT 0  -- 0 = Active, 1 = Pending Deletion
       )

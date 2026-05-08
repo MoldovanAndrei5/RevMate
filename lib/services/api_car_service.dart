@@ -4,7 +4,6 @@ import 'package:car_maintenance_tracker/utils/api_response.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../models/car.dart';
-import 'package:http/http.dart' as http;
 
 class ApiCarService {
   static final String baseUrl = "${dotenv.env["BASE_URL"]}";
@@ -26,9 +25,8 @@ class ApiCarService {
   }
 
   Future<ApiResponse<Car>> getCarById(String carUuid) async {
-    http.Response response;
     try {
-      response = await ApiClient.get(
+      final response = await ApiClient.get(
         Uri.parse("$baseUrl/cars/$carUuid"),
       ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
@@ -80,9 +78,6 @@ class ApiCarService {
       ).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return ApiResponse(jsonDecode(response.body), response.statusCode);
-      }
-      else if (response.statusCode == 404) {
-
       }
       return ApiResponse(null, response.statusCode);
     }

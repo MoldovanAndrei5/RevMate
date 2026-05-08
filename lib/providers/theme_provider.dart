@@ -3,7 +3,7 @@ import "package:shared_preferences/shared_preferences.dart";
 
 class ThemeProvider extends ChangeNotifier {
   bool _isDarkMode = false;
-  Color _accentColor = Colors.cyanAccent;
+  Color _accentColor = Colors.blue.shade900;
 
   ThemeProvider() {
     loadPreferences();
@@ -15,7 +15,7 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     _isDarkMode = prefs.getBool("isDarkMode") ?? false;
-    int colorValue = prefs.getInt("accentColor") ?? Colors.cyan.value;
+    int colorValue = prefs.getInt("accentColor") ?? Colors.blue.value;
     _accentColor = Color(colorValue);
     notifyListeners();
   }

@@ -8,6 +8,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../models/maintenance_task.dart';
 import '../utils/sort_filter_enums.dart';
+import 'dart:io';
+import 'package:car_maintenance_tracker/services/api_invoice_service.dart';
 
 class TaskProvider extends ChangeNotifier {
   List<MaintenanceTask> _tasks = [];
@@ -15,6 +17,7 @@ class TaskProvider extends ChangeNotifier {
   SortOrder _sortOrder = SortOrder.descending;
   TaskFilterOption _filterBy = TaskFilterOption.all;
   final ApiTaskService _apiTaskService = ApiTaskService();
+  final ApiInvoiceService _apiInvoiceService = ApiInvoiceService();
 
   TaskProvider() {
     SyncService().registerSyncTask(syncAllData);
@@ -134,7 +137,7 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addTask(MaintenanceTask newTask) async {
+  Future<void> addTask(MaintenanceTask newTask, {List<File> invoices = const []}) async {
     AppLogger.info("Adding task");
     final db = await AppDatabase.instance.database;
     final uuid = const Uuid().v4();
@@ -146,6 +149,16 @@ class TaskProvider extends ChangeNotifier {
         ApiResponse<MaintenanceTask> response = await _apiTaskService.postTask(newTask);
         if (response.statusCode == 200 || response.statusCode == 201) {
           await db.update("maintenanceTasks", {"is_synced": 1}, where: "task_uuid = ?", whereArgs: [uuid]);
+          for (final file in invoices) {
+            final fileName = file.path.split('/').last;
+            final fileType = _getFileType(fileName);
+            await _apiInvoiceService.uploadInvoice(
+              taskUuid: uuid,
+              file: file,
+              fileName: fileName,
+              fileType: fileType,
+            );
+          }
         }
         else {
           AppLogger.error("Server rejected the data");
@@ -267,7 +280,7 @@ class TaskProvider extends ChangeNotifier {
     return carTasks;
   }
 
-  Future<void> markTaskCompleted(String taskUuid) async {
+  Future<void> markTaskCompleted(String taskUuid, {List<File> invoices = const []}) async {
     final taskIndex = _tasks.indexWhere((t) => t.taskUuid == taskUuid);
     if (taskIndex == -1) return;
     final task = _tasks[taskIndex];
@@ -277,6 +290,29 @@ class TaskProvider extends ChangeNotifier {
       isSynced: 0,
     );
     await updateTask(updatedTask);
+    if (SyncService().isServiceAvailable && invoices.isNotEmpty) {
+      for (final file in invoices) {
+        final fileName = file.path.split('/').last;
+        final fileType = _getFileType(fileName);
+        await _apiInvoiceService.uploadInvoice(
+          taskUuid: taskUuid,
+          file: file,
+          fileName: fileName,
+          fileType: fileType,
+        );
+      }
+    }
     notifyListeners();
+  }
+
+  String _getFileType(String fileName) {
+    final ext = fileName.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'pdf': return 'application/pdf';
+      case 'png': return 'image/png';
+      case 'jpg':
+      case 'jpeg': return 'image/jpeg';
+      default: return 'application/octet-stream';
+    }
   }
 }

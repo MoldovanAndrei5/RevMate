@@ -8,7 +8,8 @@ class Car {
   final String vin;
   final int mileage;
   final String licensePlate;
-  final String? imagePath;
+  final String? imageKey;
+  final String? imageUrl;
   final int isSynced;
   final int isDeleted;
 
@@ -22,7 +23,8 @@ class Car {
     required this.vin,
     required this.mileage,
     required this.licensePlate,
-    this.imagePath,
+    this.imageKey,
+    this.imageUrl,
     this.isSynced = 0,
     this.isDeleted = 0,
   });
@@ -37,7 +39,8 @@ class Car {
     String? vin,
     int? mileage,
     String? licensePlate,
-    String? imagePath,
+    String? imageKey,
+    String? imageUrl,
     int? isSynced,
     int? isDeleted,
   }) {
@@ -51,7 +54,8 @@ class Car {
       vin: vin ?? this.vin,
       mileage: mileage ?? this.mileage,
       licensePlate: licensePlate ?? this.licensePlate,
-      imagePath: imagePath ?? this.imagePath,
+      imageKey: imageKey ?? this.imageKey,
+      imageUrl: imageUrl ?? this.imageUrl,
       isSynced: isSynced ?? this.isSynced,
       isDeleted: isDeleted ?? this.isDeleted,
     );
@@ -68,7 +72,7 @@ class Car {
       "vin": vin,
       "mileage": mileage,
       "license_plate": licensePlate,
-      "image_path": imagePath,
+      "image_key": imageKey,
       "is_synced": isSynced,
       "is_deleted": isDeleted,
     };
@@ -77,17 +81,18 @@ class Car {
   factory Car.fromMap(Map<String, Object?> map) {
     return Car(
       carUuid: map["car_uuid"] != null ? map["car_uuid"] as String : "0",
-      userId: map["user_id"] != null ? map["user_id"] as int : 0,
+      userId: map["user_id"] != null ? (map["user_id"] as num).toInt() : 0,
       name: map["name"] as String,
       make: map["make"] as String,
       model: map["model"] as String,
-      year: map["year"] as int,
+      year: (map["year"] as num).toInt(),
       vin: map["vin"] as String,
-      mileage: map["mileage"] as int,
+      mileage: (map["mileage"] as num).toInt(),
       licensePlate: map["license_plate"] as String,
-      imagePath: map["image_path"] as String?,
-      isSynced: map['is_synced'] != null ? map['is_synced'] as int : 1,
-      isDeleted: map['is_deleted'] != null ? map['is_deleted'] as int : 0,
+      imageKey: map["image_key"] as String?,
+      imageUrl: map["image_url"] as String?,
+      isSynced: map['is_synced'] != null ? (map['is_synced'] as num).toInt() : 1,
+      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : 0,
     );
   }
 }

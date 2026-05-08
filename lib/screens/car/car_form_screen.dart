@@ -1,9 +1,7 @@
 import 'dart:io';
-
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../../models/car.dart';
 import '../../providers/auth_provider.dart';
@@ -25,9 +23,12 @@ class _CarFormScreenState extends State<CarFormScreen> {
   final _vinCtrl = TextEditingController();
   final _mileageCtrl = TextEditingController();
   final _licenseCtrl = TextEditingController();
-  String? _selectedImagePath;
-  final ImagePicker _imagePicker = ImagePicker();
   final _formKey = GlobalKey<FormState>();
+  final ImagePicker _imagePicker = ImagePicker();
+
+  File? _newImageFile;         // newly picked image file
+  String? _existingImageUrl;   // presigned URL from server for existing image
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -40,7 +41,7 @@ class _CarFormScreenState extends State<CarFormScreen> {
       _vinCtrl.text = widget.car!.vin;
       _mileageCtrl.text = widget.car!.mileage.toString();
       _licenseCtrl.text = widget.car!.licensePlate;
-      _selectedImagePath = widget.car!.imagePath;
+      _existingImageUrl = widget.car!.imageUrl; // presigned URL from server
     }
   }
 
@@ -56,61 +57,143 @@ class _CarFormScreenState extends State<CarFormScreen> {
     super.dispose();
   }
 
-  Future<void> _pickImage(ImageSource imageSource) async {
-    final XFile? pickedFile = await _imagePicker.pickImage(
-      source: imageSource,
+  Future<void> _pickImage(ImageSource source) async {
+    final XFile? picked = await _imagePicker.pickImage(
+      source: source,
       maxWidth: 1000,
       imageQuality: 85,
     );
-    if (pickedFile != null) {
-      final Directory appDocDir = await getApplicationDocumentsDirectory();
-      final String fileName = path.basename(pickedFile.path);
-      final File savedImage = await File(pickedFile.path).copy("${appDocDir.path}/$fileName");
-      setState(() {
-        _selectedImagePath = savedImage.path;
-      });
+    if (picked != null) {
+      setState(() => _newImageFile = File(picked.path));
     }
   }
 
-  void _showImageSourceActionSheet(BuildContext context) {
+  void _showImageSourceSheet(BuildContext context) {
     showModalBottomSheet(
-        context: context,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(15))),
-        builder: (BuildContext context) {
-          return SafeArea(
-            child: Wrap(
-              children: [
-                ListTile(
-                  title: const Text('Camera'),
-                  leading: const Icon(Icons.photo_camera),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickImage(ImageSource.camera);
-                  },
-                ),
-                ListTile(
-                  title: const Text('Gallery'),
-                  leading: const Icon(Icons.add_photo_alternate),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickImage(ImageSource.gallery);
-                  },
-                ),
-              ],
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(15))),
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              title: const Text('Camera'),
+              leading: const Icon(Icons.photo_camera),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
             ),
-          );
-        },
+            ListTile(
+              title: const Text('Gallery'),
+              leading: const Icon(Icons.add_photo_alternate),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fix the errors in red')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    final provider = Provider.of<CarProvider>(context, listen: false);
+    final userProvider = Provider.of<AuthProvider>(context, listen: false);
+    final isEditing = widget.car != null;
+
+    final name = _nameCtrl.text.trim();
+    final make = _makeCtrl.text.trim();
+    final model = _modelCtrl.text.trim();
+    final year = int.parse(_yearCtrl.text.trim());
+    final vin = _vinCtrl.text.trim();
+    final mileage = int.parse(_mileageCtrl.text.trim());
+    final license = _licenseCtrl.text.trim();
+
+    try {
+      if (isEditing) {
+        final updated = widget.car!.copyWith(
+          name: name,
+          make: make,
+          model: model,
+          year: year,
+          vin: vin,
+          mileage: mileage,
+          licensePlate: license,
+        );
+        // Pass new image file if picked, otherwise keeps existing imageKey
+        await provider.updateCar(updated, imageFile: _newImageFile);
+      } else {
+        if (userProvider.userId == null) throw Exception("User not logged in");
+        final car = Car(
+          userId: userProvider.userId,
+          name: name,
+          make: make,
+          model: model,
+          year: year,
+          vin: vin,
+          mileage: mileage,
+          licensePlate: license,
+        );
+        await provider.addCar(car, imageFile: _newImageFile);
+      }
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Widget _buildImageAvatar() {
+    if (_newImageFile != null) {
+      return CircleAvatar(
+        radius: 50,
+        backgroundImage: FileImage(_newImageFile!),
+      );
+    }
+    // Existing image from server
+    if (_existingImageUrl != null) {
+      return CachedNetworkImage(
+        imageUrl: _existingImageUrl!,
+        imageBuilder: (context, imageProvider) => CircleAvatar(
+          radius: 50,
+          backgroundImage: imageProvider,
+        ),
+        placeholder: (context, url) => const CircleAvatar(
+          radius: 50,
+          child: CircularProgressIndicator(),
+        ),
+        errorWidget: (context, url, error) => const CircleAvatar(
+          radius: 50,
+          child: Icon(Icons.add_a_photo, size: 30),
+        ),
+      );
+    }
+    return const CircleAvatar(
+      radius: 50,
+      child: Icon(Icons.add_a_photo, size: 30),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<CarProvider>(context, listen: false);
-    final userProvider = Provider.of<AuthProvider>(context, listen: false);
     final isEditing = widget.car != null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(isEditing ? 'Edit Car' : 'Add Car'), centerTitle: true,),
+      appBar: AppBar(
+        title: Text(isEditing ? 'Edit Car' : 'Add Car'),
+        centerTitle: true,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -118,47 +201,37 @@ class _CarFormScreenState extends State<CarFormScreen> {
           child: Column(
             children: [
               GestureDetector(
-                  onTap: () => _showImageSourceActionSheet(context),
-                  child: CircleAvatar(
-                    radius: 50,
-                    backgroundImage: _selectedImagePath != null ? FileImage(File(_selectedImagePath!)) : null,
-                    child: _selectedImagePath == null ? const Icon(Icons.add_a_photo, size: 30) : null,
-                  )
+                onTap: () => _showImageSourceSheet(context),
+                child: _buildImageAvatar(),
               ),
+              const SizedBox(height: 4),
               const Text("Tap to select image"),
+              const SizedBox(height: 16),
+
               TextFormField(
                 controller: _nameCtrl,
                 decoration: const InputDecoration(labelText: 'Name'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the name for the car';
-                  }
-                  return null;
-                },
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Please enter the name for the car'
+                    : null,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _makeCtrl,
                 decoration: const InputDecoration(labelText: 'Make'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the make of the car';
-                  }
-                  return null;
-                },
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Please enter the make of the car'
+                    : null,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _modelCtrl,
                 decoration: const InputDecoration(labelText: 'Model'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the model of the car';
-                  }
-                  return null;
-                },
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Please enter the model of the car'
+                    : null,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
               ),
               const SizedBox(height: 8),
@@ -166,12 +239,14 @@ class _CarFormScreenState extends State<CarFormScreen> {
                 controller: _yearCtrl,
                 decoration: const InputDecoration(labelText: 'Year'),
                 keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the year the car was manufactured in';
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Please enter the year';
                   }
-                  final year = int.tryParse(value);
-                  if (year == null || year < 1886 || year > DateTime.now().year) {
+                  final year = int.tryParse(v);
+                  if (year == null ||
+                      year < 1886 ||
+                      year > DateTime.now().year) {
                     return 'Please enter a valid year';
                   }
                   return null;
@@ -182,24 +257,22 @@ class _CarFormScreenState extends State<CarFormScreen> {
               TextFormField(
                 controller: _vinCtrl,
                 decoration: const InputDecoration(labelText: 'VIN'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the VIN of the car';
-                  }
-                  return null;
-                },
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Please enter the VIN of the car'
+                    : null,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _mileageCtrl,
-                decoration: const InputDecoration(labelText: 'Mileage (in kilometers)'),
+                decoration:
+                const InputDecoration(labelText: 'Mileage (in kilometers)'),
                 keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the mileage of the car';
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Please enter the mileage';
                   }
-                  final mileage = int.tryParse(value);
+                  final mileage = int.tryParse(v);
                   if (mileage == null || mileage < 0) {
                     return 'Please enter a valid mileage';
                   }
@@ -211,79 +284,35 @@ class _CarFormScreenState extends State<CarFormScreen> {
               TextFormField(
                 controller: _licenseCtrl,
                 decoration: const InputDecoration(labelText: 'License Plate'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the license plate of the car';
-                  }
-                  return null;
-                },
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Please enter the license plate'
+                    : null,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 80),
             ],
           ),
         ),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
-            onPressed: () async {
-              if (_formKey.currentState!.validate()) {
-                final name = _nameCtrl.text.trim();
-                final make = _makeCtrl.text.trim();
-                final model = _modelCtrl.text.trim();
-                final year = int.parse(_yearCtrl.text.trim());
-                final vin = _vinCtrl.text.trim();
-                final mileage = int.parse(_mileageCtrl.text.trim());
-                final license = _licenseCtrl.text.trim();
-
-                if (isEditing) {
-                  final updated = widget.car!.copyWith(
-                    name: name,
-                    make: make,
-                    model: model,
-                    year: year,
-                    vin: vin,
-                    mileage: mileage,
-                    licensePlate: license,
-                    imagePath: _selectedImagePath,
-                  );
-                  await provider.updateCar(updated);
-                }
-                else {
-                  if (userProvider.userId == null) {
-                    throw Exception("User not logged in");
-                  }
-                  final car = Car(
-                    userId: userProvider.userId,
-                    name: name,
-                    make: make,
-                    model: model,
-                    year: year,
-                    vin: vin,
-                    mileage: mileage,
-                    licensePlate: license,
-                    imagePath: _selectedImagePath,
-                  );
-                  await provider.addCar(car);
-                }
-                if (mounted) {
-                  Navigator.pop(context);
-                }
-              }
-              else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please fix the errors in red')),
-                );
-              }
-            },
-            child: const Text('Save'),
+            onPressed: _isSaving ? null : _save,
+            child: _isSaving
+                ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
+            )
+                : const Text('Save'),
           ),
         ),
       ),
