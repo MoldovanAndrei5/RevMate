@@ -28,7 +28,16 @@ class ApiAuthService {
     }
   }
 
-  Future<bool> register(String firstName, String lastName, String email, String password) async {
+  Future<bool> sendOtp(String email) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/auth/send-otp"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email}),
+    ).timeout(const Duration(seconds: 15));
+    return response.statusCode == 200;
+  }
+
+  Future<bool> register(String firstName, String lastName, String email, String password, String otpCode) async {
     final response = await http.post(
       Uri.parse("$baseUrl/auth/register"),
       headers: {"Content-Type": "application/json"},
@@ -37,17 +46,8 @@ class ApiAuthService {
         "last_name": lastName,
         "email": email,
         "password": password,
-      })
-    ).timeout(const Duration(seconds: 15));
-    return response.statusCode == 200;
-  }
-
-  Future<bool> resetPassword(int userId, String password) async {
-    final response = await ApiClient.put(
-      Uri.parse("$baseUrl/auth/reset-password"),
-      body: jsonEncode({
-        "password": password,
-      })
+        "otp_code": otpCode,
+      }),
     ).timeout(const Duration(seconds: 15));
     return response.statusCode == 200;
   }

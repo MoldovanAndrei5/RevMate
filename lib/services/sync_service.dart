@@ -56,7 +56,8 @@ class SyncService extends ChangeNotifier {
     if (_isSyncing) return;
     _isSyncing = true;
     AppLogger.info("Sync started");
-    for (var task in _registry) {
+    final tasks = List<Future<void> Function()>.from(_registry);
+    for (var task in tasks) {
       try {
         await task();
       }

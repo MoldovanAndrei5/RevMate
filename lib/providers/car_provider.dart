@@ -152,7 +152,7 @@ class CarProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addCar(Car newCar, {File? imageFile}) async {
+  Future<Car?> addCar(Car newCar, {File? imageFile}) async {
     AppLogger.info("Adding car");
     final db = await AppDatabase.instance.database;
     final uuid = const Uuid().v4();
@@ -183,6 +183,10 @@ class CarProvider extends ChangeNotifier {
       }
     }
     await fetchCars();
+    return _cars.firstWhere(
+          (c) => c.carUuid == uuid,
+      orElse: () => newCar,
+    );
   }
 
   Future<void> updateCar(Car updatedCar, {File? imageFile}) async {

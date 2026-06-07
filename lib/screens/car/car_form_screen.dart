@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../models/car.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/car_provider.dart';
+import '../other/ai_suggestion_sheet.dart';
 
 class CarFormScreen extends StatefulWidget {
   final Car? car;
@@ -131,9 +132,10 @@ class _CarFormScreenState extends State<CarFormScreen> {
           vin: vin,
           mileage: mileage,
           licensePlate: license,
+          imageKey: widget.car!.imageKey,
         );
-        // Pass new image file if picked, otherwise keeps existing imageKey
         await provider.updateCar(updated, imageFile: _newImageFile);
+        if (mounted) Navigator.pop(context);
       } else {
         if (userProvider.userId == null) throw Exception("User not logged in");
         final car = Car(
@@ -146,12 +148,54 @@ class _CarFormScreenState extends State<CarFormScreen> {
           mileage: mileage,
           licensePlate: license,
         );
-        await provider.addCar(car, imageFile: _newImageFile);
+        final newCar = await provider.addCar(car, imageFile: _newImageFile);
+        if (mounted) {
+          final rootContext = Navigator.of(context).context;
+          Navigator.pop(context);
+          if (newCar != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _showAISuggestionsDialog(rootContext, newCar);
+            });
+          }
+        }
       }
-      if (mounted) Navigator.pop(context);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _showAISuggestionsDialog(BuildContext context, Car car) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('AI Maintenance Suggestions'),
+        content: Text(
+          'Would you like AI to suggest maintenance tasks for your ${car.name}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('No thanks'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // close dialog
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                isDismissible: false,
+                shape: const RoundedRectangleBorder(
+                  borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (_) => AISuggestionsSheet(car: car),
+              );
+            },
+            child: const Text("Let's go!"),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildImageAvatar() {

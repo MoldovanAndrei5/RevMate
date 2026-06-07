@@ -21,7 +21,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> loadToken() async {
     await SyncService().startSync();
-    _isLoading = true; // start loading
+    _isLoading = true;
     notifyListeners();
 
     _token = await _storage.read(key: "token");
@@ -32,8 +32,8 @@ class AuthProvider extends ChangeNotifier {
       _userId = int.tryParse(userIdStr);
     }
 
-    _isLoading = false; // finished loading
-    notifyListeners(); // triggers AuthGate rebuild
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<bool> login(String email, String password) async {
@@ -53,10 +53,17 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> register(String firstName, String lastName, String email, String password) async {
+  Future<bool> sendOtp(String email) async {
     try {
-      await _apiAuthService.register(firstName, lastName, email, password);
-      return true;
+      return await _apiAuthService.sendOtp(email);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> register(String firstName, String lastName, String email, String password, otpCode) async {
+    try {
+      return await _apiAuthService.register(firstName, lastName, email, password, otpCode);
     } catch (_) {
       return false;
     }
@@ -70,9 +77,5 @@ class AuthProvider extends ChangeNotifier {
     await _storage.delete(key: "user_id");
     await AppDatabase.instance.clearUserData();
     notifyListeners();
-  }
-
-  Future<void> resetPassword(String password) async {
-    await _apiAuthService.resetPassword(userId!, password);
   }
 }

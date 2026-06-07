@@ -3,7 +3,9 @@ import 'package:car_maintenance_tracker/providers/car_provider.dart';
 import 'package:car_maintenance_tracker/providers/task_provider.dart';
 import 'package:car_maintenance_tracker/providers/theme_provider.dart';
 import 'package:car_maintenance_tracker/screens/other/auth_gate.dart';
+import 'package:car_maintenance_tracker/screens/other/delete_account_sheet.dart';
 import 'package:car_maintenance_tracker/screens/other/reset_password_screen.dart';
+import 'package:car_maintenance_tracker/screens/other/stats_screen.dart';
 import 'package:car_maintenance_tracker/services/api_transfer_service.dart';
 import 'package:car_maintenance_tracker/widgets/bottom_navbar_widget.dart';
 import 'package:flutter/material.dart';
@@ -355,6 +357,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 8),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const StatsScreen()),
+                ),
+                icon: const Icon(Icons.bar_chart),
+                label: const Text('Account Statistics'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
             Card(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
@@ -371,19 +392,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading:
-                    const Icon(Icons.logout, color: Colors.redAccent),
+                    leading: const Icon(Icons.logout, color: Colors.redAccent),
                     title: const Text("Logout"),
                     onTap: () async {
                       await context.read<AuthProvider>().logout();
                       context.read<CarProvider>().clearCache();
                       context.read<TaskProvider>().clearCache();
                       Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                            builder: (_) => const AuthGate()),
+                        MaterialPageRoute(builder: (_) => const AuthGate()),
                             (route) => false,
                       );
                     },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever, color: Colors.red),
+                    title: const Text(
+                      "Delete account",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    onTap: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      isDismissible: false,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      builder: (_) => const DeleteAccountSheet(),
+                    ),
                   ),
                 ],
               ),

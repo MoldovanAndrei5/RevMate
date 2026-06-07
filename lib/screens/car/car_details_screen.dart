@@ -275,7 +275,7 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
                       context,
                       MaterialPageRoute(
                           builder: (_) => CarFormScreen(car: car)),
-                    ),
+                    ).then((_) => _loadCar()),
                     child: const Text("Edit car"),
                   ),
                 ),
