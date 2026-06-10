@@ -11,9 +11,9 @@ class MonthlyStats {
 
   factory MonthlyStats.fromMap(Map<String, dynamic> map) {
     return MonthlyStats(
-      month: map['month'] as String,
-      completed: map['completed'] as int,
-      scheduled: map['scheduled'] as int,
+      month: map["month"] as String,
+      completed: map["completed"] as int,
+      scheduled: map["scheduled"] as int,
     );
   }
 }
@@ -39,17 +39,17 @@ class AccountStats {
 
   factory AccountStats.fromMap(Map<String, dynamic> map) {
     return AccountStats(
-      totalSpent: (map['total_spent'] as num).toDouble(),
-      totalTasks: map['total_tasks'] as int,
-      completedTasks: map['completed_tasks'] as int,
-      pendingTasks: map['pending_tasks'] as int,
-      overdueTasks: map['overdue_tasks'] as int,
+      totalSpent: (map["total_spent"] as num).toDouble(),
+      totalTasks: map["total_tasks"] as int,
+      completedTasks: map["completed_tasks"] as int,
+      pendingTasks: map["pending_tasks"] as int,
+      overdueTasks: map["overdue_tasks"] as int,
       spentByCategory: Map<String, double>.from(
-        (map['spent_by_category'] as Map).map(
+        (map["spent_by_category"] as Map).map(
               (k, v) => MapEntry(k as String, (v as num).toDouble()),
         ),
       ),
-      tasksByMonth: (map['tasks_by_month'] as List)
+      tasksByMonth: (map["tasks_by_month"] as List)
           .map((e) => MonthlyStats.fromMap(e as Map<String, dynamic>))
           .toList(),
     );

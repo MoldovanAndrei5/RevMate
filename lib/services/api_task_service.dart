@@ -1,107 +1,66 @@
 import 'dart:convert';
-
 import 'package:car_maintenance_tracker/models/maintenance_task.dart';
-import 'package:car_maintenance_tracker/services/api_client.dart';
-import 'package:car_maintenance_tracker/utils/api_response.dart';
+import 'package:car_maintenance_tracker/utils/api_client.dart';
+import 'package:car_maintenance_tracker/utils/api_exception.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
-import '../utils/app_logger.dart';
 
 class ApiTaskService {
   static final String baseUrl = "${dotenv.env["BASE_URL"]}";
 
-  Future<ApiResponse<List<MaintenanceTask>>> getAllTasks() async {
+  Future<List<MaintenanceTask>> getAllTasks() async {
+    final response = await ApiClient.get(Uri.parse("$baseUrl/tasks/"));
     try {
-      final response = await ApiClient.get(
-        Uri.parse("$baseUrl/tasks/"),
-      ).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        return ApiResponse(data.map((item) => MaintenanceTask.fromMap(item)).toList(), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
+      final List data = jsonDecode(response.body);
+      return data.map((item) => MaintenanceTask.fromMap(item)).toList();
+    } catch (_) {
+      throw ApiException("Failed to parse task list", 500);
     }
   }
 
-  Future<ApiResponse<MaintenanceTask>> getTaskById(String taskUuid) async {
+  Future<MaintenanceTask> getTaskById(String taskUuid) async {
+    final response = await ApiClient.get(Uri.parse("$baseUrl/tasks/$taskUuid"));
     try {
-      final response = await ApiClient.get(
-        Uri.parse("$baseUrl/tasks/$taskUuid"),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        return ApiResponse(MaintenanceTask.fromMap(jsonDecode(response.body)), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
+      return MaintenanceTask.fromMap(jsonDecode(response.body));
+    } catch (_) {
+      throw ApiException("Failed to parse task", 500);
     }
   }
 
-  Future<ApiResponse<List<MaintenanceTask>>> getTasksForCar(String carUuid) async {
+  Future<List<MaintenanceTask>> getTasksForCar(String carUuid) async {
+    final response = await ApiClient.get(Uri.parse("$baseUrl/tasks/car/$carUuid"));
     try {
-      final response = await ApiClient.get(
-        Uri.parse("$baseUrl/tasks/car/$carUuid"),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        return ApiResponse(data.map((item) => MaintenanceTask.fromMap(item)).toList(), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
+      final List data = jsonDecode(response.body);
+      return data.map((item) => MaintenanceTask.fromMap(item)).toList();
+    } catch (_) {
+      throw ApiException("Failed to parse task list", 500);
     }
   }
 
-  Future<ApiResponse<MaintenanceTask>> postTask(MaintenanceTask task) async {
+  Future<MaintenanceTask> postTask(MaintenanceTask task) async {
+    final response = await ApiClient.post(
+      Uri.parse("$baseUrl/tasks/"),
+      body: jsonEncode(task.toMap()),
+    );
     try {
-      final response = await ApiClient.post(
-        Uri.parse("$baseUrl/tasks/"),
-        body: jsonEncode(task.toMap()),
-      ).timeout(const Duration(seconds: 15));
-      AppLogger.info("Raw response: ${response.body}");
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return ApiResponse(MaintenanceTask.fromMap(jsonDecode(response.body)), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
+      return MaintenanceTask.fromMap(jsonDecode(response.body));
+    } catch (_) {
+      throw ApiException("Failed to parse task", 500);
     }
   }
 
-  Future<ApiResponse<MaintenanceTask>> putTask(MaintenanceTask task) async {
+  Future<MaintenanceTask> putTask(MaintenanceTask task) async {
+    final response = await ApiClient.put(
+      Uri.parse("$baseUrl/tasks/${task.taskUuid}"),
+      body: jsonEncode(task.toMap()),
+    );
     try {
-      final response = await ApiClient.put(
-        Uri.parse("$baseUrl/tasks/${task.taskUuid}"),
-        body: jsonEncode(task.toMap()),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        return ApiResponse(MaintenanceTask.fromMap(jsonDecode(response.body)), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
+      return MaintenanceTask.fromMap(jsonDecode(response.body));
+    } catch (_) {
+      throw ApiException("Failed to parse task", 500);
     }
   }
 
-  Future<ApiResponse<String>> deleteTask(String taskUuid) async {
-    try {
-      final response = await ApiClient.delete(
-        Uri.parse("$baseUrl/tasks/$taskUuid"),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        return ApiResponse(jsonDecode(response.body), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
-    }
+  Future<void> deleteTask(String taskUuid) async {
+    await ApiClient.delete(Uri.parse("$baseUrl/tasks/$taskUuid"));
   }
 }

@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'package:car_maintenance_tracker/services/api_auth_service.dart';
+import 'package:car_maintenance_tracker/utils/api_exception.dart';
+import 'package:car_maintenance_tracker/utils/snack_bar_helper.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/auth_provider.dart';
 
 class OtpVerificationSheet extends StatefulWidget {
   final String email;
@@ -22,10 +23,11 @@ class OtpVerificationSheet extends StatefulWidget {
 }
 
 class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
+  final ApiAuthService _authService = ApiAuthService();
   final _otpCtrl = TextEditingController();
   bool _isVerifying = false;
   bool _isResending = false;
-  int _resendCooldown = 60; // seconds before resend is allowed
+  int _resendCooldown = 60;
   Timer? _timer;
 
   @override
@@ -56,30 +58,22 @@ class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
   Future<void> _verify() async {
     final otp = _otpCtrl.text.trim();
     if (otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter the 6-digit code')),
-      );
+      showTopSnackBar(context, "Please enter the 6-digit code", type: SnackBarType.error);
       return;
     }
-
     setState(() => _isVerifying = true);
     try {
-      final success = await context.read<AuthProvider>().register(
+      await _authService.register(
         widget.firstName,
         widget.lastName,
         widget.email,
         widget.password,
         otp,
       );
-
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
       if (mounted) {
-        if (success) {
-          Navigator.pop(context, true);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid or expired code. Please try again.')),
-          );
-        }
+        showTopSnackBar(context, e.message, type: SnackBarType.error);
       }
     } finally {
       if (mounted) setState(() => _isVerifying = false);
@@ -89,19 +83,15 @@ class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
   Future<void> _resend() async {
     setState(() => _isResending = true);
     try {
-      final success = await context.read<AuthProvider>().sendOtp(widget.email);
+      await _authService.sendRegisterOtp(widget.email);
       if (mounted) {
-        if (success) {
-          _otpCtrl.clear();
-          _startResendTimer();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('New code sent to your email')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to resend code. Please try again.')),
-          );
-        }
+        _otpCtrl.clear();
+        _startResendTimer();
+        showTopSnackBar(context, "New code sent to your email");
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        showTopSnackBar(context, e.message, type: SnackBarType.error);
       }
     } finally {
       if (mounted) setState(() => _isResending = false);
@@ -110,19 +100,20 @@ class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return SafeArea(
       child: SingleChildScrollView(
         child: Padding(
           padding: EdgeInsets.only(
             left: 24,
             right: 24,
-            top: 32,
+            top: 24,
             bottom: MediaQuery.of(context).viewInsets.bottom + 24,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle
               Container(
                 width: 40,
                 height: 4,
@@ -131,36 +122,43 @@ class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
 
-              // Icon
-              Icon(
-                Icons.mark_email_unread_outlined,
-                size: 56,
-                color: Theme.of(context).colorScheme.primary,
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.mark_email_unread_outlined,
+                  size: 40,
+                  color: colorScheme.primary,
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // Title
               Text(
-                'Verify your email',
+                "Verify your email",
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
-
-              // Subtitle
               Text(
-                'We sent a 6-digit code to',
+                "We sent a 6-digit verification code to",
+                textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
                 widget.email,
+                textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.bold,
+                  color: colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 32),
@@ -177,16 +175,22 @@ class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
                   letterSpacing: 12,
                 ),
                 decoration: InputDecoration(
-                  counterText: '',
+                  counterText: "",
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  hintText: '······',
+                  filled: true,
+                  fillColor: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey.shade900
+                      : Colors.grey.shade50,
+                  hintText: "••••••",
                   hintStyle: TextStyle(
                     letterSpacing: 12,
                     color: Colors.grey.shade400,
+                    fontSize: 28,
                   ),
                 ),
+                onSubmitted: (_) => _verify(),
               ),
               const SizedBox(height: 24),
 
@@ -194,39 +198,43 @@ class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
               ElevatedButton(
                 onPressed: _isVerifying ? null : _verify,
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
                 ),
-                child: _isVerifying
-                    ? const SizedBox(
-                  height: 20,
-                  width: 20,
+                child: _isVerifying ? SizedBox(
+                  height: 22,
+                  width: 22,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                )
-                    : const Text('Verify'),
+                    strokeWidth: 2,
+                    color: colorScheme.onPrimary,
+                  ),
+                ) : const Text("Verify", style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                ),
               ),
               const SizedBox(height: 12),
 
-              // Resend button
               TextButton(
                 onPressed: _resendCooldown > 0 || _isResending ? null : _resend,
-                child: _isResending
-                    ? const SizedBox(
+                child: _isResending ? SizedBox(
                   height: 16,
                   width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                    : Text(
-                  _resendCooldown > 0
-                      ? 'Resend code in ${_resendCooldown}s'
-                      : 'Resend code',
-                ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary,
+                  ),
+                ) : Text(_resendCooldown > 0 ? "Resend code in ${_resendCooldown}s" : "Resend code",),
               ),
               const SizedBox(height: 8),
+
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
             ],
           ),
         ),

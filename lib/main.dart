@@ -1,7 +1,8 @@
 import 'package:car_maintenance_tracker/providers/auth_provider.dart';
 import 'package:car_maintenance_tracker/providers/theme_provider.dart';
+import 'package:car_maintenance_tracker/providers/sync_service.dart';
 import 'package:car_maintenance_tracker/utils/app_logger.dart';
-import 'package:car_maintenance_tracker/screens/other/auth_gate.dart';
+import 'package:car_maintenance_tracker/screens/auth/auth_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -38,11 +39,12 @@ class CarMaintenanceApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CarProvider()..fetchCars()),
         ChangeNotifierProvider(create: (_) => TaskProvider()..fetchTasks()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => SyncService()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
-            title: 'Car Maintenance Tracker',
+            title: "RevMate",
             themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
 
             theme: ThemeData(

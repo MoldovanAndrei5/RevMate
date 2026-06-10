@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../models/maintenance_task.dart';
 import '../../providers/task_provider.dart';
 import '../../utils/date_utils.dart';
+import '../../utils/snack_bar_helper.dart';
+import '../../utils/api_exception.dart';
 
 class TaskFormScreen extends StatefulWidget {
   final String carUuid;
@@ -27,9 +29,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   DateTime? _selectedDate;
   bool _isTaskCompleted = false;
   bool _isSaving = false;
-
-  //Invoice state
   final List<File> _selectedInvoices = [];
+
+  bool get _isEditing => widget.task != null;
 
   @override
   void initState() {
@@ -38,9 +40,9 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       _titleCtrl.text = widget.task!.title;
       _categoryCtrl.text = widget.task!.category;
       _selectedDate = widget.task!.completedDate ?? widget.task!.scheduledDate;
-      _mileageCtrl.text = widget.task!.mileage?.toString() ?? '';
-      _costCtrl.text = widget.task!.cost?.toString() ?? '';
-      _notesCtrl.text = widget.task!.notes?.toString() ?? '';
+      _mileageCtrl.text = widget.task!.mileage?.toString() ?? "";
+      _costCtrl.text = widget.task!.cost?.toString() ?? "";
+      _notesCtrl.text = widget.task!.notes?.toString() ?? "";
       _isTaskCompleted = widget.task!.completedDate != null;
     }
   }
@@ -64,93 +66,88 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       firstDate: _isTaskCompleted ? DateTime(1886) : now,
       lastDate: _isTaskCompleted ? now : DateTime(2100),
     );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
   Future<void> _pickInvoices() async {
     final result = await FilePicker.pickFiles(
       allowMultiple: true,
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      allowedExtensions: ["pdf", "jpg", "jpeg", "png"],
     );
-
     if (result != null) {
       setState(() {
-        final newFiles = result.paths
-            .whereType<String>()
-            .map((path) => File(path))
-            .toList();
-        _selectedInvoices.addAll(newFiles);
+        _selectedInvoices.addAll(
+          result.paths.whereType<String>().map((p) => File(p)),
+        );
       });
     }
   }
 
-  void _removeInvoice(int index) {
-    setState(() => _selectedInvoices.removeAt(index));
-  }
-
   String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (bytes < 1024) return "$bytes B";
+    if (bytes < 1024 * 1024) return "${(bytes / 1024).toStringAsFixed(1)} KB";
+    return "${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB";
   }
 
   IconData _fileIcon(String fileName) {
-    final ext = fileName.split('.').last.toLowerCase();
-    if (ext == 'pdf') return Icons.picture_as_pdf;
-    return Icons.image;
+    final ext = fileName.split(".").last.toLowerCase();
+    return ext == "pdf" ? Icons.picture_as_pdf_outlined : Icons.image_outlined;
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fix the errors in red')),
-      );
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedDate == null) {
+      showTopSnackBar(context, "Please select a date", type: SnackBarType.error);
       return;
     }
 
     setState(() => _isSaving = true);
 
     final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-    final isEditing = widget.task != null;
-
-    final title = _titleCtrl.text.trim();
-    final category = _categoryCtrl.text.trim();
-    final mileage = int.tryParse(_mileageCtrl.text.trim()) ?? 0;
-    final cost = double.tryParse(_costCtrl.text.trim()) ?? 0;
+    final mileage = int.tryParse(_mileageCtrl.text.trim());
+    final cost = double.tryParse(_costCtrl.text.trim());
     final notes = _notesCtrl.text.trim();
     final scheduledDate = _isTaskCompleted ? null : _selectedDate;
     final completedDate = _isTaskCompleted ? _selectedDate : null;
 
     try {
-      if (isEditing) {
+      if (_isEditing) {
         final updatedTask = widget.task!.copyWith(
-          title: title,
-          category: category.isEmpty ? null : category,
+          title: _titleCtrl.text.trim(),
+          category: _categoryCtrl.text.trim(),
           mileage: mileage,
           cost: cost,
           scheduledDate: scheduledDate,
           completedDate: completedDate,
-          notes: notes,
+          notes: notes.isEmpty ? null : notes,
         );
         await taskProvider.updateTask(updatedTask);
+        if (mounted) {
+          showTopSnackBar(context, "Task updated successfully");
+          Navigator.pop(context);
+        }
       } else {
         final newTask = MaintenanceTask(
           carUuid: widget.carUuid,
-          title: title,
-          category: category,
+          title: _titleCtrl.text.trim(),
+          category: _categoryCtrl.text.trim(),
           mileage: mileage,
           cost: cost,
           scheduledDate: scheduledDate,
           completedDate: completedDate,
-          notes: notes,
+          notes: notes.isEmpty ? null : notes,
         );
         await taskProvider.addTask(newTask, invoices: _selectedInvoices);
+        if (mounted) {
+          showTopSnackBar(context, "Task added successfully");
+          Navigator.pop(context);
+        }
       }
-
-      if (mounted) Navigator.pop(context);
+    } on ApiException catch (e) {
+      if (mounted) {
+        showTopSnackBar(context, e.message, type: SnackBarType.error);
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -158,169 +155,255 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.task != null;
-    final showInvoices = _isTaskCompleted && !isEditing;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final showInvoices = _isTaskCompleted && !_isEditing;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Task' : 'Add Task'),
+        title: Text(_isEditing ? "Edit Task" : "Add Task"),
         centerTitle: true,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              //Completed / Scheduled toggle
-              if (!isEditing)
+              if (!_isEditing) ...[
+                _sectionLabel("Task Type"),
+                const SizedBox(height: 12),
                 SegmentedButton<bool>(
                   segments: const [
-                    ButtonSegment(value: false, label: Text("Scheduled")),
-                    ButtonSegment(value: true, label: Text("Completed")),
+                    ButtonSegment(
+                      value: false,
+                      label: Text("Scheduled"),
+                      icon: Icon(Icons.schedule_rounded, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text("Completed"),
+                      icon: Icon(Icons.check_circle_outline_rounded, size: 16),
+                    ),
                   ],
-                  selected: <bool>{_isTaskCompleted},
-                  onSelectionChanged: (Set<bool> value) {
-                    setState(() {
-                      _isTaskCompleted = value.first;
-                      _selectedDate = null;
-                    });
-                  },
+                  selected: {_isTaskCompleted},
+                  onSelectionChanged: (v) => setState(() {
+                    _isTaskCompleted = v.first;
+                    _selectedDate = null;
+                  }),
+                  style: ButtonStyle(
+                    shape: WidgetStateProperty.all(
+                      RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
                 ),
-              if (!isEditing) const SizedBox(height: 8),
+                const SizedBox(height: 24),
+              ],
 
-              // Form fields
+              _sectionLabel("Task Details"),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _titleCtrl,
-                decoration: const InputDecoration(labelText: 'Title'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the title of the task';
-                  }
-                  return null;
-                },
+                decoration: InputDecoration(
+                  labelText: "Title",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
+                ),
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? "Please enter the task title"
+                    : null,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _categoryCtrl,
-                decoration: const InputDecoration(labelText: 'Category'),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter the category';
-                  }
-                  return null;
-                },
+                decoration: InputDecoration(
+                  labelText: "Category",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
+                ),
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? "Please enter a category"
+                    : null,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 24),
+
+              _sectionLabel(_isTaskCompleted ? "Completion Date" : "Scheduled Date"),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: _pickDate,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.grey.shade700
+                          : Colors.grey.shade400,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_today_outlined, color: colorScheme.primary, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _selectedDate == null
+                              ? "Select a date"
+                              : formatDate(_selectedDate!),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: _selectedDate == null
+                                ? Colors.grey.shade500
+                                : colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              _sectionLabel("Optional Details"),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      _selectedDate == null
-                          ? 'No date selected'
-                          : formatDate(_selectedDate!),
+                    child: TextFormField(
+                      controller: _mileageCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "Mileage (km)",
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: isDark
+                            ? Colors.grey.shade900
+                            : Colors.grey.shade50,
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return null;
+                        final m = int.tryParse(v);
+                        if (m == null || m < 0) return "Invalid";
+                        return null;
+                      },
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
                     ),
                   ),
-                  TextButton(
-                    onPressed: _pickDate,
-                    child: const Text('Select Date'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _costCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "Cost (EUR)",
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: isDark
+                            ? Colors.grey.shade900
+                            : Colors.grey.shade50,
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return null;
+                        final c = double.tryParse(v);
+                        if (c == null || c < 0) return "Invalid";
+                        return null;
+                      },
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               TextFormField(
-                controller: _mileageCtrl,
-                decoration: const InputDecoration(labelText: 'Mileage'),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return null;
-                  final mileage = int.tryParse(value);
-                  if (mileage == null || mileage < 0) {
-                    return 'Please enter a valid mileage';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _costCtrl,
-                decoration: const InputDecoration(labelText: 'Cost'),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return null;
-                  final cost = double.tryParse(value);
-                  if (cost == null || cost < 0) {
-                    return 'Please enter a valid cost';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              TextField(
                 controller: _notesCtrl,
-                decoration: const InputDecoration(labelText: 'Notes'),
                 maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: "Notes",
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.only(bottom: 48),
+                    child: Icon(Icons.notes_outlined),
+                  ),
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor:
+                  isDark ? Colors.grey.shade900 : Colors.grey.shade50,
+                ),
               ),
 
-              //Invoice section (only for completed tasks)
               if (showInvoices) ...[
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Invoices & Attachments',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    _sectionLabel("Invoices & Attachments"),
                     TextButton.icon(
                       onPressed: _pickInvoices,
-                      icon: const Icon(Icons.attach_file),
-                      label: const Text('Add'),
+                      icon: const Icon(Icons.attach_file, size: 18),
+                      label: const Text("Add"),
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
                 if (_selectedInvoices.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.grey.shade900
+                          : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
                     child: Text(
-                      'No attachments added',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
-                      ),
+                      "No attachments added",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.grey.shade500, fontSize: 13),
                     ),
                   )
                 else
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _selectedInvoices.length,
-                    itemBuilder: (context, index) {
-                      final file = _selectedInvoices[index];
-                      final fileName = file.path.split('/').last;
-                      final fileSize = file.lengthSync();
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: Icon(_fileIcon(fileName)),
+                  Card(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _selectedInvoices.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final file = _selectedInvoices[index];
+                        final fileName = file.path.split("/").last;
+                        return ListTile(
+                          leading: Icon(
+                            _fileIcon(fileName),
+                            color: colorScheme.primary,
+                          ),
                           title: Text(
                             fileName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          subtitle: Text(_formatFileSize(fileSize)),
+                          subtitle: Text(_formatFileSize(file.lengthSync())),
                           trailing: IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red),
-                            onPressed: () => _removeInvoice(index),
+                            icon: const Icon(Icons.close_rounded, color: Colors.red, size: 18),
+                            onPressed: () => setState(() => _selectedInvoices.removeAt(index)),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
               ],
               const SizedBox(height: 80),
@@ -330,27 +413,42 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            ),
             onPressed: _isSaving ? null : _save,
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 52),
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
             child: _isSaving
-                ? const SizedBox(
-              height: 20,
-              width: 20,
+                ? SizedBox(
+              height: 22,
+              width: 22,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.white,
+                color: colorScheme.onPrimary,
               ),
-            )
-                : const Text('Save'),
+            ) : Text(
+              _isEditing ? "Save Changes" : "Add Task",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey.shade500,
+        letterSpacing: 0.5,
       ),
     );
   }

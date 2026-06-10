@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:car_maintenance_tracker/services/api_helper_service.dart';
 import 'package:car_maintenance_tracker/utils/app_logger.dart';
+import 'package:car_maintenance_tracker/utils/connectivity_state.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 
@@ -12,13 +13,13 @@ class SyncService extends ChangeNotifier {
   bool _isSyncing = false;
   final List<Future<void> Function()> _registry = [];
   final ApiHelperService _apiHelperService = ApiHelperService();
-  bool _isServiceAvailable = false;
   bool _isRunning = false;
   Timer? _timer;
   StreamSubscription? _connectivitySub;
+  String? _lastSyncError;
 
-  bool get isServiceAvailable => _isServiceAvailable;
-  set setIsServiceAvailable(bool value) => _isServiceAvailable = value;
+  String? get lastSyncError => _lastSyncError;
+  bool get isSyncing => _isSyncing;
 
   void registerSyncTask(Future<void> Function() task) {
     _registry.add(task);
@@ -27,17 +28,22 @@ class SyncService extends ChangeNotifier {
   Future<void> startSync() async {
     if (_isRunning) return;
     _isRunning = true;
+    ConnectivityState().onWentOffline = () => notifyListeners();
     await _checkServerStatus();
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) async {
       if (results.isNotEmpty && results.first != ConnectivityResult.none) {
         await _checkServerStatus();
       }
     });
-    _timer = Timer.periodic(const Duration(seconds: 120), (timer) => _checkServerStatus());
+    _timer = Timer.periodic(
+      const Duration(seconds: 120),
+          (timer) => _checkServerStatus(),
+    );
   }
 
   Future<void> stopSync() async {
     _isRunning = false;
+    ConnectivityState().onWentOffline = null;
     await _connectivitySub?.cancel();
     _connectivitySub = null;
     _timer?.cancel();
@@ -45,8 +51,8 @@ class SyncService extends ChangeNotifier {
   }
 
   Future<void> _checkServerStatus() async {
-    _isServiceAvailable = await _apiHelperService.isServerOnline();
-    if (_isServiceAvailable) {
+    ConnectivityState().isServiceAvailable = await _apiHelperService.isServerOnline();
+    if (ConnectivityState().isServiceAvailable) {
       await syncAll();
     }
     notifyListeners();
@@ -55,14 +61,16 @@ class SyncService extends ChangeNotifier {
   Future<void> syncAll() async {
     if (_isSyncing) return;
     _isSyncing = true;
-    AppLogger.info("Sync started");
+    _lastSyncError = null;
+    notifyListeners();
+
     final tasks = List<Future<void> Function()>.from(_registry);
     for (var task in tasks) {
       try {
         await task();
-      }
-      catch (e) {
-        AppLogger.error("Sync failed");
+      } catch (e) {
+        _lastSyncError = e.toString().replaceAll("Exception: ", "");
+        AppLogger.error("Sync task failed: $e");
       }
     }
     _isSyncing = false;

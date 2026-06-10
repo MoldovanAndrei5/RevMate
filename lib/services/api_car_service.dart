@@ -1,88 +1,65 @@
 import 'dart:convert';
-import 'package:car_maintenance_tracker/services/api_client.dart';
-import 'package:car_maintenance_tracker/utils/api_response.dart';
+import 'dart:typed_data';
+import 'package:car_maintenance_tracker/utils/api_client.dart';
+import 'package:car_maintenance_tracker/utils/api_exception.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 import '../models/car.dart';
 
 class ApiCarService {
   static final String baseUrl = "${dotenv.env["BASE_URL"]}";
 
-  Future<ApiResponse<List<Car>>> getAllCars() async {
+  Future<List<Car>> getAllCars() async {
+    final response = await ApiClient.get(Uri.parse("$baseUrl/cars/"));
     try {
-      final response = await ApiClient.get(
-        Uri.parse("$baseUrl/cars/"),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        return ApiResponse(data.map((item) => Car.fromMap(item)).toList(), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception(e.toString());
+      final List data = jsonDecode(response.body);
+      return data.map((item) => Car.fromMap(item)).toList();
+    } catch (_) {
+      throw ApiException("Failed to parse car list", 500);
     }
   }
 
-  Future<ApiResponse<Car>> getCarById(String carUuid) async {
+  Future<Car> getCarById(String carUuid) async {
+    final response = await ApiClient.get(Uri.parse("$baseUrl/cars/$carUuid"));
     try {
-      final response = await ApiClient.get(
-        Uri.parse("$baseUrl/cars/$carUuid"),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        return ApiResponse(Car.fromMap(jsonDecode(response.body)), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
+      return Car.fromMap(jsonDecode(response.body));
+    } catch (_) {
+      throw ApiException("Failed to parse car", 500);
     }
   }
 
-  Future<ApiResponse<Car>> postCar(Car car) async {
+  Future<Car> postCar(Car car) async {
+    final response = await ApiClient.post(
+      Uri.parse("$baseUrl/cars/"),
+      body: jsonEncode(car.toMap()),
+    );
     try {
-      final response = await ApiClient.post(
-        Uri.parse("$baseUrl/cars/"),
-        body: jsonEncode(car.toMap()),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return ApiResponse(Car.fromMap(jsonDecode(response.body)), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
+      return Car.fromMap(jsonDecode(response.body));
+    } catch (_) {
+      throw ApiException("Failed to parse car", 500);
     }
   }
 
-  Future<ApiResponse<Car>> putCar(Car car) async {
+  Future<Car> putCar(Car car) async {
+    final response = await ApiClient.put(
+      Uri.parse("$baseUrl/cars/${car.carUuid}"),
+      body: jsonEncode(car.toMap()),
+    );
     try {
-      final response = await ApiClient.put(
-        Uri.parse("$baseUrl/cars/${car.carUuid}"),
-        body: jsonEncode(car.toMap()),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        return ApiResponse(Car.fromMap(jsonDecode(response.body)), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
+      return Car.fromMap(jsonDecode(response.body));
+    } catch (_) {
+      throw ApiException("Failed to parse car", 500);
     }
   }
 
-  Future<ApiResponse<String>> deleteCar(String carUuid) async {
-    try {
-      final response = await ApiClient.delete(
-        Uri.parse("$baseUrl/cars/$carUuid"),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        return ApiResponse(jsonDecode(response.body), response.statusCode);
-      }
-      return ApiResponse(null, response.statusCode);
-    }
-    catch (e) {
-      throw Exception("Server unreachable");
-    }
+  Future<void> deleteCar(String carUuid) async {
+    await ApiClient.delete(Uri.parse("$baseUrl/cars/$carUuid"));
+  }
+
+  Future<Uint8List> getCarReport(String carUuid) async {
+    final response = await ApiClient.get(
+      Uri.parse("$baseUrl/cars/$carUuid/report"),
+      timeout: const Duration(seconds: 30),
+    );
+    return response.bodyBytes;
   }
 }

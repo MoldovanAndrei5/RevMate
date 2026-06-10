@@ -3,6 +3,8 @@ import 'package:car_maintenance_tracker/services/api_account_service.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/api_exception.dart';
+
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
 
@@ -27,20 +29,28 @@ class _StatsScreenState extends State<StatsScreen> {
       _isLoading = true;
       _error = null;
     });
-    final stats = await _accountService.getStats();
-    if (mounted) {
-      setState(() {
-        _stats = stats;
-        _isLoading = false;
-        if (stats == null) _error = 'Failed to load statistics';
-      });
+    try {
+      final stats = await _accountService.getStats();
+      if (mounted) {
+        setState(() {
+          _stats = stats;
+          _isLoading = false;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Statistics'), centerTitle: true),
+      appBar: AppBar(title: const Text("Statistics"), centerTitle: true),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -48,19 +58,17 @@ class _StatsScreenState extends State<StatsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline,
-                size: 48, color: Colors.red),
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
             const SizedBox(height: 16),
             Text(_error!),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadStats,
-              child: const Text('Retry'),
+              child: const Text("Retry"),
             ),
           ],
         ),
-      )
-          : RefreshIndicator(
+      ) : RefreshIndicator(
         onRefresh: _loadStats,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -91,7 +99,7 @@ class _StatsScreenState extends State<StatsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Overview',
+        Text("Overview",
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -102,8 +110,8 @@ class _StatsScreenState extends State<StatsScreen> {
             Expanded(
               child: _summaryCard(
                 icon: Icons.euro,
-                label: 'Total Spent',
-                value: '€${s.totalSpent.toStringAsFixed(2)}',
+                label: "Total Spent",
+                value: "€${s.totalSpent.toStringAsFixed(2)}",
                 color: Colors.blue,
               ),
             ),
@@ -111,8 +119,8 @@ class _StatsScreenState extends State<StatsScreen> {
             Expanded(
               child: _summaryCard(
                 icon: Icons.build,
-                label: 'Total Tasks',
-                value: '${s.totalTasks}',
+                label: "Total Tasks",
+                value: "${s.totalTasks}",
                 color: Colors.purple,
               ),
             ),
@@ -124,8 +132,8 @@ class _StatsScreenState extends State<StatsScreen> {
             Expanded(
               child: _summaryCard(
                 icon: Icons.check_circle,
-                label: 'Completed',
-                value: '${s.completedTasks}',
+                label: "Completed",
+                value: "${s.completedTasks}",
                 color: Colors.green,
               ),
             ),
@@ -133,8 +141,8 @@ class _StatsScreenState extends State<StatsScreen> {
             Expanded(
               child: _summaryCard(
                 icon: Icons.schedule,
-                label: 'Pending',
-                value: '${s.pendingTasks}',
+                label: "Pending",
+                value: "${s.pendingTasks}",
                 color: Colors.orange,
               ),
             ),
@@ -142,8 +150,8 @@ class _StatsScreenState extends State<StatsScreen> {
             Expanded(
               child: _summaryCard(
                 icon: Icons.warning,
-                label: 'Overdue',
-                value: '${s.overdueTasks}',
+                label: "Overdue",
+                value: "${s.overdueTasks}",
                 color: Colors.red,
               ),
             ),
@@ -193,33 +201,30 @@ class _StatsScreenState extends State<StatsScreen> {
         PieChartSectionData(
           value: s.completedTasks.toDouble(),
           color: Colors.green,
-          title: '${s.completedTasks}',
+          title: "${s.completedTasks}",
           radius: 60,
-          titleStyle: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold),
+          titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       if (s.pendingTasks > 0)
         PieChartSectionData(
           value: s.pendingTasks.toDouble(),
           color: Colors.orange,
-          title: '${s.pendingTasks}',
+          title: "${s.pendingTasks}",
           radius: 60,
-          titleStyle: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold),
+          titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       if (s.overdueTasks > 0)
         PieChartSectionData(
           value: s.overdueTasks.toDouble(),
           color: Colors.red,
-          title: '${s.overdueTasks}',
+          title: "${s.overdueTasks}",
           radius: 60,
-          titleStyle: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold),
+          titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
     ];
 
     return _chartCard(
-      title: 'Task Status',
+      title: "Task Status",
       child: Column(
         children: [
           SizedBox(
@@ -230,11 +235,11 @@ class _StatsScreenState extends State<StatsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _legend(Colors.green, 'Completed'),
+              _legend(Colors.green, "Completed"),
               const SizedBox(width: 16),
-              _legend(Colors.orange, 'Pending'),
+              _legend(Colors.orange, "Pending"),
               const SizedBox(width: 16),
-              _legend(Colors.red, 'Overdue'),
+              _legend(Colors.red, "Overdue"),
             ],
           ),
         ],
@@ -261,7 +266,7 @@ class _StatsScreenState extends State<StatsScreen> {
       return PieChartSectionData(
         value: e.value,
         color: colors[i % colors.length],
-        title: '€${e.value.toStringAsFixed(0)}',
+        title: "€${e.value.toStringAsFixed(0)}",
         radius: 60,
         titleStyle: const TextStyle(
             color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
@@ -269,7 +274,7 @@ class _StatsScreenState extends State<StatsScreen> {
     }).toList();
 
     return _chartCard(
-      title: 'Spend by Category',
+      title: "Spend by Category",
       child: Column(
         children: [
           SizedBox(
@@ -282,8 +287,7 @@ class _StatsScreenState extends State<StatsScreen> {
             runSpacing: 8,
             alignment: WrapAlignment.center,
             children: categories.asMap().entries.map((entry) {
-              return _legend(
-                  colors[entry.key % colors.length], entry.value.key);
+              return _legend(colors[entry.key % colors.length], entry.value.key);
             }).toList(),
           ),
         ],
@@ -298,7 +302,7 @@ class _StatsScreenState extends State<StatsScreen> {
         .fold(0.0, (a, b) => a > b ? a : b);
 
     return _chartCard(
-      title: 'Tasks by Month',
+      title: "Tasks by Month",
       child: Column(
         children: [
           SizedBox(
@@ -336,7 +340,7 @@ class _StatsScreenState extends State<StatsScreen> {
                         if (i < 0 || i >= months.length) {
                           return const SizedBox.shrink();
                         }
-                        final parts = months[i].month.split(' ');
+                        final parts = months[i].month.split(" ");
                         return Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(parts[0],
@@ -369,9 +373,9 @@ class _StatsScreenState extends State<StatsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _legend(Colors.green, 'Completed'),
+              _legend(Colors.green, "Completed"),
               const SizedBox(width: 16),
-              _legend(Colors.orange, 'Scheduled'),
+              _legend(Colors.orange, "Scheduled"),
             ],
           ),
         ],
@@ -407,8 +411,7 @@ class _StatsScreenState extends State<StatsScreen> {
         Container(
           width: 12,
           height: 12,
-          decoration: BoxDecoration(
-              color: color, borderRadius: BorderRadius.circular(3)),
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
         ),
         const SizedBox(width: 4),
         Text(label, style: const TextStyle(fontSize: 12)),

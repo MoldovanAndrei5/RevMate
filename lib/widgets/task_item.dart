@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import '../models/maintenance_task.dart';
 import '../utils/date_utils.dart';
 
@@ -45,10 +44,10 @@ class TaskItem extends StatelessWidget {
             ),
           ),
           subtitle: Text(
-            '${task.category} ${dateStr.isNotEmpty ? "- $dateStr" : task.mileage ?? ""}',
+            "${task.category} ${dateStr.isNotEmpty ? "- $dateStr" : task.mileage ?? ""}",
             style: TextStyle(
               fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
           onTap: onTap,

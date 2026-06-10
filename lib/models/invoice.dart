@@ -19,13 +19,13 @@ class Invoice {
 
   factory Invoice.fromMap(Map<String, dynamic> map) {
     return Invoice(
-      invoiceUuid: map['invoice_uuid'] as String,
-      taskUuid: map['task_uuid'] as String,
-      fileKey: map['file_key'] as String,
-      fileName: map['file_name'] as String,
-      fileType: map['file_type'] as String,
-      fileSize: (map['file_size'] as num).toInt(),
-      uploadedAt: DateTime.parse(map['uploaded_at'] as String),
+      invoiceUuid: map["invoice_uuid"] as String,
+      taskUuid: map["task_uuid"] as String,
+      fileKey: map["file_key"] as String,
+      fileName: map["file_name"] as String,
+      fileType: map["file_type"] as String,
+      fileSize: (map["file_size"] as num).toInt(),
+      uploadedAt: DateTime.parse(map["uploaded_at"] as String),
     );
   }
 }

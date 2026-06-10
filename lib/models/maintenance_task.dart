@@ -81,8 +81,8 @@ class MaintenanceTask {
       scheduledDate: map["scheduled_date"] == null ? null : DateTime.fromMillisecondsSinceEpoch((map["scheduled_date"] as num).toInt()),
       completedDate: map["completed_date"] == null ? null : DateTime.fromMillisecondsSinceEpoch((map["completed_date"] as num).toInt()),
       notes: map["notes"] as String?,
-      isSynced: map['is_synced'] != null ? (map['is_synced'] as num).toInt() : 1,
-      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : 0,
+      isSynced: map["is_synced"] != null ? (map["is_synced"] as num).toInt() : 1,
+      isDeleted: map["is_deleted"] != null ? (map["is_deleted"] as num).toInt() : 0,
     );
   }
 }

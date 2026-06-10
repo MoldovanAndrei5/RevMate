@@ -91,8 +91,8 @@ class Car {
       licensePlate: map["license_plate"] as String,
       imageKey: map["image_key"] as String?,
       imageUrl: map["image_url"] as String?,
-      isSynced: map['is_synced'] != null ? (map['is_synced'] as num).toInt() : 1,
-      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : 0,
+      isSynced: map["is_synced"] != null ? (map["is_synced"] as num).toInt() : 1,
+      isDeleted: map["is_deleted"] != null ? (map["is_deleted"] as num).toInt() : 0,
     );
   }
 }

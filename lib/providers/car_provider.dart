@@ -2,8 +2,9 @@ import 'dart:io';
 import 'package:car_maintenance_tracker/database.dart';
 import 'package:car_maintenance_tracker/services/api_car_service.dart';
 import 'package:car_maintenance_tracker/services/api_upload_service.dart';
-import 'package:car_maintenance_tracker/services/sync_service.dart';
-import 'package:car_maintenance_tracker/utils/api_response.dart';
+import 'package:car_maintenance_tracker/providers/sync_service.dart';
+import 'package:car_maintenance_tracker/utils/api_exception.dart';
+import 'package:car_maintenance_tracker/utils/connectivity_state.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -13,7 +14,7 @@ import '../utils/app_logger.dart';
 
 class CarProvider extends ChangeNotifier {
   List<Car> _cars = [];
-  String _searchQuery = '';
+  String _searchQuery = "";
   final ApiCarService _apiCarService = ApiCarService();
   final ApiUploadService _uploadService = ApiUploadService();
   final ApiTransferService _apiTransferService = ApiTransferService();
@@ -32,109 +33,91 @@ class CarProvider extends ChangeNotifier {
 
   void clearCache() {
     _cars = [];
-    _searchQuery = '';
+    _searchQuery = "";
     notifyListeners();
   }
 
-  void _abortSync() {
-    AppLogger.error("Sync aborted! Server unreachable");
-    SyncService().setIsServiceAvailable = false;
-  }
-
-  Future<String?> _uploadCarImage(File imageFile) async {
-    final fileName = imageFile.path.split('/').last;
-    final ext = fileName.split('.').last.toLowerCase();
-    final fileType = ext == 'png' ? 'image/png' : 'image/jpeg';
-
+  Future<String> _uploadCarImage(File imageFile) async {
+    final fileName = imageFile.path.split("/").last;
+    final ext = fileName.split(".").last.toLowerCase();
+    final fileType = ext == "png" ? "image/png" : "image/jpeg";
     return await _uploadService.uploadFile(
       file: imageFile,
       fileName: fileName,
       fileType: fileType,
-      folder: 'cars',
+      folder: "cars",
     );
   }
 
   Future<void> syncAllData() async {
     AppLogger.info("Syncing server with local cars table");
     final db = await AppDatabase.instance.database;
-    try {
-      final unsyncedCars =
-      await db.query('cars', where: 'is_synced = 0 AND is_deleted = 0');
+    bool hasErrors = false;
+      final unsyncedCars = await db.query("cars", where: "is_synced = 0 AND is_deleted = 0");
       for (var carMap in unsyncedCars) {
         Car car = Car.fromMap(carMap);
-        ApiResponse<Car> putResponse = await _apiCarService.putCar(car);
-        if (putResponse.statusCode == 200) {
-          await db.update('cars', {'is_synced': 1},
-              where: 'car_uuid = ?', whereArgs: [car.carUuid]);
-        } else if (putResponse.statusCode == 404) {
-          ApiResponse<Car> postResponse = await _apiCarService.postCar(car);
-          if (postResponse.statusCode == 200 ||
-              postResponse.statusCode == 201) {
-            await db.update('cars', {'is_synced': 1},
-                where: 'car_uuid = ?', whereArgs: [car.carUuid]);
-          } else {
-            AppLogger.error(
-                "Failed to sync car ${car.carUuid} with the server");
+        try {
+          await _apiCarService.putCar(car);
+          await db.update("cars", {"is_synced": 1}, where: "car_uuid = ?", whereArgs: [car.carUuid]);
+        } on ApiException catch (e) {
+          if (e.statusCode == 0) {
+            AppLogger.error("Sync aborted! Server unreachable");
+            ConnectivityState().isServiceAvailable = false;
+            throw Exception("Server unreachable");
           }
-        } else {
-          AppLogger.error("Failed to sync car ${car.carUuid} with the server");
+          else if (e.statusCode == 404) {
+            try {
+              await _apiCarService.postCar(car);
+              await db.update("cars", {"is_synced": 1}, where: "car_uuid = ?",
+                  whereArgs: [car.carUuid]);
+            } on ApiException {
+              AppLogger.error("Failed to sync car ${car.carUuid}");
+              hasErrors = true;
+            }
+          }
+          else {
+            AppLogger.error("Failed to sync car ${car.carUuid}: ${e.message}");
+            hasErrors = true;
+          }
         }
       }
-      final deletedCars = await db.query('cars', where: 'is_deleted = 1');
+      final deletedCars = await db.query("cars", where: "is_deleted = 1");
       for (var mapCar in deletedCars) {
         Car car = Car.fromMap(mapCar);
-        ApiResponse<String> deleteResponse =
-        await _apiCarService.deleteCar(car.carUuid!);
-        if (deleteResponse.statusCode == 200) {
-          await db.delete('cars',
-              where: 'car_uuid = ?', whereArgs: [car.carUuid]);
-        } else {
-          AppLogger.error("Failed to sync car ${car.carUuid} with the server");
+        try {
+          await _apiCarService.deleteCar(car.carUuid!);
+          await db.delete("cars", where: "car_uuid = ?", whereArgs: [car.carUuid]);
+        } on ApiException catch (e) {
+          if (e.statusCode == 0) {
+            AppLogger.error("Sync aborted! Server unreachable");
+            ConnectivityState().isServiceAvailable = false;
+            throw Exception("Server unreachable");
+          }
+          if (e.statusCode == 404) {
+            await db.delete("cars", where: "car_uuid = ?", whereArgs: [car.carUuid]);
+          } else {
+            hasErrors = true;
+          }
         }
       }
-    } catch (e) {
-      _abortSync();
-    }
+      if (hasErrors) throw Exception("Some cars failed to sync");
   }
 
   Future<void> fetchCars() async {
     AppLogger.info("Starting fetchCars");
     bool loadedFromServer = false;
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<List<Car>> response = await _apiCarService.getAllCars();
-        if (response.statusCode == 200) {
-          _cars = response.data!;
-          loadedFromServer = true;
-
-          // Filter out cars with pending outgoing transfers
-          try {
-            final transferRes = await _apiTransferService.getOutgoingTransfers();
-            if (transferRes.data != null) {
-              final pendingUuids = transferRes.data!
-                  .map((t) => t.carUuid)
-                  .toSet();
-              _cars = _cars
-                  .where((c) => !pendingUuids.contains(c.carUuid))
-                  .toList();
-            }
-          } catch (e) {
-            AppLogger.error("Failed to fetch outgoing transfers", e);
-          }
-
-          await _updateLocalDb();
-        } else {
-          AppLogger.error("Server error");
-        }
-      } catch (e) {
-        AppLogger.error(
-            "Fetching from server failed, switching to offline mode", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    if (ConnectivityState().isServiceAvailable) {
+      _cars = await _apiCarService.getAllCars();
+      loadedFromServer = true;
+      // Filter out cars with pending outgoing transfers
+      final transfers = await _apiTransferService.getOutgoingTransfers();
+      final pendingUuids = transfers.map((t) => t.carUuid).toSet();
+      _cars = _cars.where((c) => !pendingUuids.contains(c.carUuid)).toList();
+      await _updateLocalDb();
     }
     if (!loadedFromServer) {
       final db = await AppDatabase.instance.database;
-      final result = await db.query('cars', where: 'is_deleted = 0');
+      final result = await db.query("cars", where: "is_deleted = 0");
       _cars = result.map((e) => Car.fromMap(e)).toList();
     }
     notifyListeners();
@@ -143,85 +126,46 @@ class CarProvider extends ChangeNotifier {
   Future<void> _updateLocalDb() async {
     AppLogger.info("Updating local cars table from server");
     final db = await AppDatabase.instance.database;
-    await db.delete('cars', where: 'is_synced = 1 AND is_deleted = 0');
+    await db.delete("cars", where: "is_synced = 1 AND is_deleted = 0");
     for (var car in _cars) {
       var carData = car.toMap();
-      carData['is_synced'] = 1;
-      await db.insert('cars', carData,
+      carData["is_synced"] = 1;
+      await db.insert("cars", carData,
           conflictAlgorithm: ConflictAlgorithm.replace);
     }
   }
 
-  Future<Car?> addCar(Car newCar, {File? imageFile}) async {
+  Future<Car> addCar(Car newCar, {File? imageFile}) async {
     AppLogger.info("Adding car");
     final db = await AppDatabase.instance.database;
     final uuid = const Uuid().v4();
-
-    if (imageFile != null && SyncService().isServiceAvailable) {
+    if (imageFile != null && ConnectivityState().isServiceAvailable) {
       final imageKey = await _uploadCarImage(imageFile);
-      if (imageKey != null) {
-        newCar = newCar.copyWith(imageKey: imageKey);
-      }
+      newCar = newCar.copyWith(imageKey: imageKey);
     }
-
     newCar = newCar.copyWith(isSynced: 0, carUuid: uuid);
-    await db.insert('cars', newCar.toMap());
+    await db.insert("cars", newCar.toMap());
     AppLogger.info("Added car with uuid $uuid");
-
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<Car> response = await _apiCarService.postCar(newCar);
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          await db.update('cars', {'is_synced': 1},
-              where: 'car_uuid = ?', whereArgs: [uuid]);
-        } else {
-          AppLogger.error('Server rejected the data');
-        }
-      } catch (e) {
-        AppLogger.error("Server request failed", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    if (ConnectivityState().isServiceAvailable) {
+      await _apiCarService.postCar(newCar);
+      await db.update("cars", {"is_synced": 1}, where: "car_uuid = ?", whereArgs: [uuid]);
     }
     await fetchCars();
-    return _cars.firstWhere(
-          (c) => c.carUuid == uuid,
-      orElse: () => newCar,
-    );
+    return _cars.firstWhere((c) => c.carUuid == uuid, orElse: () => newCar);
   }
 
   Future<void> updateCar(Car updatedCar, {File? imageFile}) async {
     AppLogger.info("Updating car ${updatedCar.carUuid}");
     final db = await AppDatabase.instance.database;
     updatedCar = updatedCar.copyWith(isSynced: 0);
-
-    if (SyncService().isServiceAvailable && imageFile != null) {
-      try {
-        // Upload new image to S3 if a new one was picked
-        final imageKey = await _uploadCarImage(imageFile);
-        if (imageKey != null) {
-          updatedCar = updatedCar.copyWith(imageKey: imageKey);
-        }
-      } catch (e) {
-        AppLogger.error("Failed to upload car image", e);
-      }
+    if (ConnectivityState().isServiceAvailable && imageFile != null) {
+      final imageKey = await _uploadCarImage(imageFile);
+      updatedCar = updatedCar.copyWith(imageKey: imageKey);
     }
-
-    await db.update('cars', updatedCar.toMap(),
-        where: 'car_uuid = ?', whereArgs: [updatedCar.carUuid]);
-
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<Car> response = await _apiCarService.putCar(updatedCar);
-        if (response.statusCode == 200) {
-          await db.update('cars', {'is_synced': 1},
-              where: 'car_uuid = ?', whereArgs: [updatedCar.carUuid]);
-        } else {
-          AppLogger.error('Server rejected the data');
-        }
-      } catch (e) {
-        AppLogger.error("Server request failed", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    await db.update("cars", updatedCar.toMap(), where: "car_uuid = ?", whereArgs: [updatedCar.carUuid]);
+    if (ConnectivityState().isServiceAvailable) {
+      await _apiCarService.putCar(updatedCar);
+      await db.update("cars", {"is_synced": 1}, where: "car_uuid = ?", whereArgs: [updatedCar.carUuid]);
     }
     await fetchCars();
   }
@@ -229,54 +173,26 @@ class CarProvider extends ChangeNotifier {
   Future<void> deleteCar(String carUuid) async {
     AppLogger.info("Deleting car $carUuid");
     final db = await AppDatabase.instance.database;
-    await db.update('cars', {'is_deleted': 1, 'is_synced': 0},
-        where: 'car_uuid = ?', whereArgs: [carUuid]);
-
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<String> response =
-        await _apiCarService.deleteCar(carUuid);
-        if (response.statusCode == 200) {
-          await db.delete('cars',
-              where: 'car_uuid = ?', whereArgs: [carUuid]);
-        } else {
-          AppLogger.error("Server rejected the data");
-        }
-      } catch (e) {
-        AppLogger.error("Server request failed", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    await db.update("cars", {"is_deleted": 1, "is_synced": 0}, where: "car_uuid = ?", whereArgs: [carUuid]);
+    if (ConnectivityState().isServiceAvailable) {
+      await _apiCarService.deleteCar(carUuid);
+      await db.delete("cars", where: "car_uuid = ?", whereArgs: [carUuid]);
     }
     await fetchCars();
   }
 
-  Future<Car?> getById(String carUuid) async {
+  Future<Car> getById(String carUuid) async {
     AppLogger.info("Attempting to get car $carUuid");
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<Car> response = await _apiCarService.getCarById(carUuid);
-        if (response.statusCode == 200) {
-          return response.data;
-        } else if (response.statusCode == 404) {
-          AppLogger.error("Car not found on the server");
-          return null;
-        } else {
-          AppLogger.error("Server error");
-        }
-      } catch (e) {
-        AppLogger.error(
-            "Fetching from server failed, switching to offline mode", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    if (ConnectivityState().isServiceAvailable) {
+      final car = await _apiCarService.getCarById(carUuid);
+      return car;
     }
     final db = await AppDatabase.instance.database;
-    final result = await db.query('cars',
-        where: 'car_uuid = ?', whereArgs: [carUuid]);
-    if (result.isNotEmpty) {
-      return Car.fromMap(result.first);
+    final result = await db.query("cars", where: "car_uuid = ?", whereArgs: [carUuid]);
+    if (result.isEmpty) {
+      throw ApiException("Car not found", 404);
     }
-    AppLogger.error("Car not found");
-    return null;
+    return Car.fromMap(result.first);
   }
 
   List<Car> getFilteredCars() {

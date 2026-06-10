@@ -1,55 +1,36 @@
 import 'dart:convert';
-import 'package:car_maintenance_tracker/services/api_client.dart';
+import 'package:car_maintenance_tracker/utils/api_client.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 import '../models/stats.dart';
+import '../utils/api_exception.dart';
 
 class ApiAccountService {
   static final String baseUrl = "${dotenv.env["BASE_URL"]}";
 
-  Future<bool> resetPassword(String password) async {
-    final response = await ApiClient.put(
-        Uri.parse("$baseUrl/account/reset-password"),
-        body: jsonEncode({
-          "password": password,
-        })
-    ).timeout(const Duration(seconds: 15));
-    return response.statusCode == 200;
+  Future<void> resetPassword(String password) async {
+    await ApiClient.put(
+      Uri.parse("$baseUrl/account/reset-password"),
+      body: jsonEncode({"password": password}),
+    );
   }
 
-  Future<bool> sendDeleteOtp() async {
-    try {
-      final response = await ApiClient.post(
-        Uri.parse("$baseUrl/account/send-delete-otp"),
-      ).timeout(const Duration(seconds: 15));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+  Future<void> sendDeleteOtp() async {
+    await ApiClient.post(Uri.parse("$baseUrl/account/send-delete-otp"));
   }
 
-  Future<bool> deleteAccount(String otpCode) async {
-    try {
-      final response = await ApiClient.delete(
-        Uri.parse("$baseUrl/account/delete-account?otp_code=$otpCode"),
-      ).timeout(const Duration(seconds: 15));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+  Future<void> deleteAccount(String otpCode) async {
+    await ApiClient.delete(
+      Uri.parse("$baseUrl/account/delete-account"),
+      body: jsonEncode({"otp_code": otpCode}),
+    );
   }
 
   Future<AccountStats?> getStats() async {
+    final response = await ApiClient.get(Uri.parse("$baseUrl/account/stats"));
     try {
-      final response = await ApiClient.get(
-        Uri.parse("$baseUrl/account/stats"),
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        return AccountStats.fromMap(jsonDecode(response.body));
-      }
-      return null;
+      return AccountStats.fromMap(jsonDecode(response.body));
     } catch (_) {
-      return null;
+      throw ApiException("Failed to parse statistics", 500);
     }
   }
 }

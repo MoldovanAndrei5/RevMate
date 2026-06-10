@@ -1,8 +1,9 @@
 import 'package:car_maintenance_tracker/database.dart';
 import 'package:car_maintenance_tracker/services/api_task_service.dart';
-import 'package:car_maintenance_tracker/services/sync_service.dart';
-import 'package:car_maintenance_tracker/utils/api_response.dart';
+import 'package:car_maintenance_tracker/providers/sync_service.dart';
+import 'package:car_maintenance_tracker/utils/api_exception.dart';
 import 'package:car_maintenance_tracker/utils/app_logger.dart';
+import 'package:car_maintenance_tracker/utils/connectivity_state.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -24,9 +25,7 @@ class TaskProvider extends ChangeNotifier {
   }
 
   TaskFilterOption get filterBy => _filterBy;
-
   TaskSortOption get sortBy => _sortBy;
-
   SortOrder get sortOrder => _sortOrder;
 
   void setSortBy(TaskSortOption newSortBy) {
@@ -44,83 +43,78 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<MaintenanceTask> get () => _tasks;
+  List<MaintenanceTask> get tasks => _tasks;
 
   void clearCache() {
     _tasks = [];
     notifyListeners();
   }
 
-  void _abortSync() {
-    AppLogger.error("Sync aborted! Server unreachable");
-    SyncService().setIsServiceAvailable = false;
-  }
-
   Future<void> syncAllData() async {
     AppLogger.info("Syncing server with local maintenanceTasks table");
     final db = await AppDatabase.instance.database;
-    try {
-      final unsyncedTasks = await db.query(
-          'maintenanceTasks', where: 'is_synced = 0 AND is_deleted = 0');
+    bool hasErrors = false;
+      final unsyncedTasks = await db.query("maintenanceTasks", where: "is_synced = 0 AND is_deleted = 0");
       for (var taskMap in unsyncedTasks) {
         MaintenanceTask task = MaintenanceTask.fromMap(taskMap);
-        ApiResponse<MaintenanceTask> putResponse = await _apiTaskService.putTask(task);
-        if (putResponse.statusCode == 200) {
-          await db.update('maintenanceTasks', {'is_synced': 1}, where: 'task_uuid = ?', whereArgs: [task.taskUuid]);
-        }
-        else if (putResponse.statusCode == 404) {
-          ApiResponse<MaintenanceTask> postResponse = await _apiTaskService.postTask(task);
-          if (postResponse.statusCode == 200 || postResponse.statusCode == 201) {
-            await db.update('maintenanceTasks', {'is_synced': 1}, where: 'task_uuid = ?', whereArgs: [task.taskUuid]);
+        try {
+          await _apiTaskService.putTask(task);
+          await db.update("maintenanceTasks", {"is_synced": 1}, where: "task_uuid = ?", whereArgs: [task.taskUuid]);
+        } on ApiException catch (e) {
+          if (e.statusCode == 0) {
+            AppLogger.error("Sync aborted! Server unreachable");
+            ConnectivityState().isServiceAvailable = false;
+            throw Exception("Server unreachable");
+          }
+          else if (e.statusCode == 404) {
+            try {
+              await _apiTaskService.postTask(task);
+              await db.update("maintenanceTasks", {"is_synced": 1}, where: "task_uuid = ?", whereArgs: [task.taskUuid]);
+            }
+            on ApiException {
+              AppLogger.error("Failed to sync task ${task.taskUuid}");
+              hasErrors = true;
+            }
           }
           else {
-            AppLogger.error("Failed to sync task ${task.taskUuid} with the server");
+            AppLogger.error("Failed to sync task ${task.taskUuid}");
+            hasErrors = true;
           }
         }
-        else {
-          AppLogger.error("Failed to sync task ${task.taskUuid} with the server");
-        }
       }
-      final deletedCTasks = await db.query('maintenanceTasks', where: 'is_deleted = 1');
+      final deletedCTasks = await db.query("maintenanceTasks", where: "is_deleted = 1");
       for (var taskMap in deletedCTasks) {
         MaintenanceTask task = MaintenanceTask.fromMap(taskMap);
-        ApiResponse<String> response = await _apiTaskService.deleteTask(task.taskUuid!);
-        if (response.statusCode == 200) {
-          await db.delete('maintenanceTasks', where: 'task_uuid = ?', whereArgs: [task.taskUuid]);
-        }
-        else {
-          AppLogger.error("Failed to sync task ${task.taskUuid} with the server");
+        try {
+          await _apiTaskService.deleteTask(task.taskUuid!);
+          await db.delete("maintenanceTasks", where: "task_uuid = ?", whereArgs: [task.taskUuid]);
+        } on ApiException catch (e) {
+          if (e.statusCode == 0) {
+            AppLogger.error("Sync aborted! Server unreachable");
+            ConnectivityState().isServiceAvailable = false;
+            throw Exception("Server unreachable");
+          }
+          if (e.statusCode == 404) {
+            await db.delete("maintenanceTasks", where: "task_uuid = ?", whereArgs: [task.taskUuid]);
+          } else {
+            hasErrors = true;
+          }
         }
       }
-    }
-    catch (e) {
-      _abortSync();
-    }
+    if (hasErrors) throw Exception("Some tasks failed to sync");
   }
 
   Future<void> fetchTasks() async {
     AppLogger.info("Starting fetchTasks");
     bool loadedFromServer = false;
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<List<MaintenanceTask>> response = await _apiTaskService.getAllTasks();
-        if (response.statusCode == 200) {
-          _tasks = response.data!;
-          loadedFromServer = true;
-          await _updateLocalDb();
-        }
-        else {
-          AppLogger.error("Server error");
-        }
-      }
-      catch (e) {
-        AppLogger.error("Fetching from server failed, switching to offline mode", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    if (ConnectivityState().isServiceAvailable) {
+        _tasks = await _apiTaskService.getAllTasks();
+        loadedFromServer = true;
+        await _updateLocalDb();
     }
     if (!loadedFromServer) {
       final db = await AppDatabase.instance.database;
-      final result = await db.query('maintenanceTasks', where: 'is_deleted = 0');
+      final result = await db.query("maintenanceTasks", where: "is_deleted = 0");
       _tasks = result.map((e) => MaintenanceTask.fromMap(e)).toList();
     }
     notifyListeners();
@@ -129,11 +123,11 @@ class TaskProvider extends ChangeNotifier {
   Future<void> _updateLocalDb() async {
     AppLogger.info("Updating local maintenanceTasks table from server");
     final db =  await AppDatabase.instance.database;
-    await db.delete('maintenanceTasks', where: 'is_synced = 1 AND is_deleted = 0');
+    await db.delete("maintenanceTasks", where: "is_synced = 1 AND is_deleted = 0");
     for (var task in _tasks) {
       var taskData = task.toMap();
-      taskData['is_synced'] = 1;
-      await db.insert('maintenanceTasks', taskData, conflictAlgorithm: ConflictAlgorithm.replace);
+      taskData["is_synced"] = 1;
+      await db.insert("maintenanceTasks", taskData, conflictAlgorithm: ConflictAlgorithm.replace);
     }
   }
 
@@ -142,31 +136,24 @@ class TaskProvider extends ChangeNotifier {
     final db = await AppDatabase.instance.database;
     final uuid = const Uuid().v4();
     newTask = newTask.copyWith(isSynced: 0, taskUuid: uuid);
-    await db.insert('maintenanceTasks', newTask.toMap());
+    await db.insert("maintenanceTasks", newTask.toMap());
     AppLogger.info("Added task with id $uuid");
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<MaintenanceTask> response = await _apiTaskService.postTask(newTask);
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          await db.update("maintenanceTasks", {"is_synced": 1}, where: "task_uuid = ?", whereArgs: [uuid]);
-          for (final file in invoices) {
-            final fileName = file.path.split('/').last;
-            final fileType = _getFileType(fileName);
-            await _apiInvoiceService.uploadInvoice(
-              taskUuid: uuid,
-              file: file,
-              fileName: fileName,
-              fileType: fileType,
-            );
-          }
+    if (ConnectivityState().isServiceAvailable) {
+      await _apiTaskService.postTask(newTask);
+      await db.update("maintenanceTasks", {"is_synced": 1}, where: "task_uuid = ?", whereArgs: [uuid]);
+      for (final file in invoices) {
+        final fileName = file.path.split("/").last;
+        final fileType = _getFileType(fileName);
+        try {
+          await _apiInvoiceService.uploadInvoice(
+            taskUuid: uuid,
+            file: file,
+            fileName: fileName,
+            fileType: fileType,
+          );
+        } on ApiException catch (e) {
+          AppLogger.error("Failed to upload invoice: ${e.message}");
         }
-        else {
-          AppLogger.error("Server rejected the data");
-        }
-      }
-      catch (e) {
-        AppLogger.error("Server request failed", e);
-        SyncService().setIsServiceAvailable = false;
       }
     }
     await fetchTasks();
@@ -176,21 +163,10 @@ class TaskProvider extends ChangeNotifier {
     AppLogger.info("Updating task ${updatedTask.taskUuid}");
     final db = await AppDatabase.instance.database;
     updatedTask = updatedTask.copyWith(isSynced: 0);
-    await db.update('maintenanceTasks', updatedTask.toMap(), where: 'task_uuid = ?', whereArgs: [updatedTask.taskUuid]);
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<MaintenanceTask> response = await _apiTaskService.putTask(updatedTask);
-        if (response.statusCode == 200) {
-          await db.update('maintenanceTasks', {"is_synced": 1}, where: 'task_uuid = ?', whereArgs: [updatedTask.taskUuid]);
-        }
-        else {
-          AppLogger.error("Server rejected the data");
-        }
-      }
-      catch (e) {
-        AppLogger.error("Server request failed", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    await db.update("maintenanceTasks", updatedTask.toMap(), where: "task_uuid = ?", whereArgs: [updatedTask.taskUuid]);
+    if (ConnectivityState().isServiceAvailable) {
+      await _apiTaskService.putTask(updatedTask);
+      await db.update("maintenanceTasks", {"is_synced": 1}, where: "task_uuid = ?", whereArgs: [updatedTask.taskUuid]);
     }
     await fetchTasks();
   }
@@ -198,51 +174,26 @@ class TaskProvider extends ChangeNotifier {
   Future<void> deleteTask(String taskUuid) async {
     AppLogger.info("Deleting task $taskUuid");
     final db = await AppDatabase.instance.database;
-    await db.update('maintenanceTasks', {'is_synced' : 0, 'is_deleted': 1}, where: 'task_uuid = ?', whereArgs: [taskUuid]);
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<String> response = await _apiTaskService.deleteTask(taskUuid);
-        if (response.statusCode == 200) {
-          await db.delete('maintenanceTasks', where: 'task_uuid = ?', whereArgs: [taskUuid]);
-        }
-        else {
-          AppLogger.error("Server rejected the data");
-        }
-      }
-      catch (e) {
-        AppLogger.error("Server request failed", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    await db.update("maintenanceTasks", {"is_synced" : 0, "is_deleted": 1}, where: "task_uuid = ?", whereArgs: [taskUuid]);
+    if (ConnectivityState().isServiceAvailable) {
+      await _apiTaskService.deleteTask(taskUuid);
+      await db.delete("maintenanceTasks", where: "task_uuid = ?", whereArgs: [taskUuid]);
     }
     await fetchTasks();
   }
 
-  Future<MaintenanceTask?> getById(String taskUuid) async {
+  Future<MaintenanceTask> getById(String taskUuid) async {
     AppLogger.info("Attempting to get task $taskUuid");
-    if (SyncService().isServiceAvailable) {
-      try {
-        ApiResponse<MaintenanceTask> response = await _apiTaskService.getTaskById(taskUuid);
-        if (response.statusCode == 200) {
-          return response.data;
-        }
-        else if (response.statusCode == 404) {
-          AppLogger.error("Task not found on the server");
-        }
-        else {
-          AppLogger.error("Server error");
-        }
-      } catch (e) {
-        AppLogger.error("Fetching from server failed, switching to offline mode", e);
-        SyncService().setIsServiceAvailable = false;
-      }
+    if (ConnectivityState().isServiceAvailable) {
+        MaintenanceTask task = await _apiTaskService.getTaskById(taskUuid);
+        return task;
     }
     final db = await AppDatabase.instance.database;
     final result = await db.query("maintenanceTasks", where: "task_uuid = ?", whereArgs: [taskUuid]);
-    if (result.isNotEmpty) {
-      return MaintenanceTask.fromMap(result.first);
+    if (result.isEmpty) {
+      throw ApiException("Task not found", 404);
     }
-    AppLogger.error("Task not found");
-    return null;
+    return MaintenanceTask.fromMap(result.first);
   }
 
   Future<List<MaintenanceTask>> getTasksForCar(String carUuid) async {
@@ -290,9 +241,9 @@ class TaskProvider extends ChangeNotifier {
       isSynced: 0,
     );
     await updateTask(updatedTask);
-    if (SyncService().isServiceAvailable && invoices.isNotEmpty) {
+    if (ConnectivityState().isServiceAvailable && invoices.isNotEmpty) {
       for (final file in invoices) {
-        final fileName = file.path.split('/').last;
+        final fileName = file.path.split("/").last;
         final fileType = _getFileType(fileName);
         await _apiInvoiceService.uploadInvoice(
           taskUuid: taskUuid,
@@ -302,17 +253,16 @@ class TaskProvider extends ChangeNotifier {
         );
       }
     }
-    notifyListeners();
   }
 
   String _getFileType(String fileName) {
-    final ext = fileName.split('.').last.toLowerCase();
+    final ext = fileName.split(".").last.toLowerCase();
     switch (ext) {
-      case 'pdf': return 'application/pdf';
-      case 'png': return 'image/png';
-      case 'jpg':
-      case 'jpeg': return 'image/jpeg';
-      default: return 'application/octet-stream';
+      case "pdf": return "application/pdf";
+      case "png": return "image/png";
+      case "jpg":
+      case "jpeg": return "image/jpeg";
+      default: return "application/octet-stream";
     }
   }
 }

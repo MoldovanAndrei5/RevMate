@@ -21,7 +21,7 @@ class AppDatabase {
   }
 
   static Future<void> _configureDB(Database db) async {
-    await db.execute('PRAGMA foreign_keys = ON');
+    await db.execute("PRAGMA foreign_keys = ON");
   }
 
   Future _createDB(Database db, int version) async {
