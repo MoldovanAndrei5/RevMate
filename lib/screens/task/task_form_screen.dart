@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/maintenance_task.dart';
 import '../../providers/task_provider.dart';
 import '../../utils/date_utils.dart';
-import '../../utils/snack_bar_helper.dart';
+import '../../widgets/top_snack_bar.dart';
 import '../../utils/api_exception.dart';
 
 class TaskFormScreen extends StatefulWidget {

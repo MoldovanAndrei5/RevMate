@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../providers/sync_service.dart';
 import '../car/car_list_screen.dart';
 import 'login_screen.dart';
 
@@ -18,6 +19,7 @@ class _AuthGateState extends State<AuthGate> {
   bool _initialized = false;
 
   Future<void> _initialize(BuildContext context) async {
+    await context.read<SyncService>().startSync();
     await context.read<CarProvider>().fetchCars();
     await context.read<TaskProvider>().fetchTasks();
   }

@@ -8,11 +8,12 @@ import '../../providers/auth_provider.dart';
 import '../../providers/car_provider.dart';
 import '../other/ai_suggestion_sheet.dart';
 import 'package:car_maintenance_tracker/utils/api_exception.dart';
-import 'package:car_maintenance_tracker/utils/snack_bar_helper.dart';
+import 'package:car_maintenance_tracker/widgets/top_snack_bar.dart';
 
 class CarFormScreen extends StatefulWidget {
   final Car? car;
-  const CarFormScreen({super.key, this.car});
+  final void Function(Car newCar)? onCarAdded;
+  const CarFormScreen({super.key, this.car, this.onCarAdded});
 
   @override
   State<CarFormScreen> createState() => _CarFormScreenState();
@@ -184,13 +185,10 @@ class _CarFormScreenState extends State<CarFormScreen> {
         );
         final newCar = await provider.addCar(car, imageFile: _newImageFile);
         if (mounted) {
-          final rootContext = Navigator.of(context).context;
           Navigator.pop(context);
-          showTopSnackBar(rootContext, "${car.name} added successfully");
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-              _showAISuggestionsDialog(rootContext, newCar);
-          });
+          widget.onCarAdded?.call(newCar);
         }
+
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -199,52 +197,6 @@ class _CarFormScreenState extends State<CarFormScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
-  }
-
-  void _showAISuggestionsDialog(BuildContext context, Car car) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.auto_awesome_rounded, color: Theme.of(context).colorScheme.primary, size: 22),
-            const SizedBox(width: 8),
-            const Text("AI Suggestions"),
-          ],
-        ),
-        content: Text("Would you like AI to suggest maintenance tasks for your ${car.name}?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("No thanks"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                isDismissible: false,
-                shape: const RoundedRectangleBorder(
-                  borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                builder: (_) => AISuggestionsSheet(car: car),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text("Let's go!"),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildImagePicker(ColorScheme colorScheme) {

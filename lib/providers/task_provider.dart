@@ -117,6 +117,11 @@ class TaskProvider extends ChangeNotifier {
       final result = await db.query("maintenanceTasks", where: "is_deleted = 0");
       _tasks = result.map((e) => MaintenanceTask.fromMap(e)).toList();
     }
+    final db = await AppDatabase.instance.database;
+    final carUuids = (await db.query("cars", columns: ["car_uuid"], where: "is_deleted = 0"))
+        .map((e) => e["car_uuid"] as String)
+        .toSet();
+    _tasks = _tasks.where((t) => carUuids.contains(t.carUuid)).toList();
     notifyListeners();
   }
 
@@ -125,9 +130,12 @@ class TaskProvider extends ChangeNotifier {
     final db =  await AppDatabase.instance.database;
     await db.delete("maintenanceTasks", where: "is_synced = 1 AND is_deleted = 0");
     for (var task in _tasks) {
+      final carExists = await db.query("cars", where: "car_uuid = ?", whereArgs: [task.carUuid]);
+      if (carExists.isEmpty) continue;
       var taskData = task.toMap();
       taskData["is_synced"] = 1;
-      await db.insert("maintenanceTasks", taskData, conflictAlgorithm: ConflictAlgorithm.replace);
+      await db.insert("maintenanceTasks", taskData,
+          conflictAlgorithm: ConflictAlgorithm.replace);
     }
   }
 

@@ -3,7 +3,7 @@ import 'package:car_maintenance_tracker/models/maintenance_task.dart';
 import 'package:car_maintenance_tracker/providers/task_provider.dart';
 import 'package:car_maintenance_tracker/services/api_ai_service.dart';
 import 'package:car_maintenance_tracker/utils/api_exception.dart';
-import 'package:car_maintenance_tracker/utils/snack_bar_helper.dart';
+import 'package:car_maintenance_tracker/widgets/top_snack_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -364,7 +364,6 @@ class _AISuggestionsSheetState extends State<AISuggestionsSheet> {
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
             labelText: "Mileage at last oil change (km) — optional",
-            prefixIcon: const Icon(Icons.oil_barrel_outlined),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -382,10 +381,6 @@ class _AISuggestionsSheetState extends State<AISuggestionsSheet> {
           decoration: InputDecoration(
             labelText: "Describe any known issues — optional",
             hintText: "e.g. brakes feel soft, AC not cold...",
-            prefixIcon: const Padding(
-              padding: EdgeInsets.only(bottom: 60),
-              child: Icon(Icons.warning_amber_outlined),
-            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
             ),

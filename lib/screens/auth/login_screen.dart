@@ -4,7 +4,7 @@ import 'package:car_maintenance_tracker/utils/api_exception.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../utils/snack_bar_helper.dart';
+import '../../widgets/top_snack_bar.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:car_maintenance_tracker/services/api_auth_service.dart';
 import 'package:car_maintenance_tracker/utils/api_exception.dart';
-import 'package:car_maintenance_tracker/utils/snack_bar_helper.dart';
+import 'package:car_maintenance_tracker/widgets/top_snack_bar.dart';
 import 'package:flutter/material.dart';
 
 class OtpVerificationSheet extends StatefulWidget {

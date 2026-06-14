@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../../models/car.dart';
 import '../../providers/car_provider.dart';
 import '../../widgets/sync_indicator.dart';
+import '../../widgets/top_snack_bar.dart';
+import '../other/ai_suggestion_sheet.dart';
 import 'car_form_screen.dart';
 
 class CarListScreen extends StatefulWidget {
@@ -33,6 +35,52 @@ class CarListScreenState extends State<CarListScreen> {
 
   Future<void> _refresh() async {
     await context.read<CarProvider>().fetchCars();
+  }
+
+  void _showAISuggestionsDialog(BuildContext context, Car car) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape:
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.auto_awesome_rounded, color: Theme.of(context).colorScheme.primary, size: 22),
+            const SizedBox(width: 8),
+            const Text("AI Suggestions"),
+          ],
+        ),
+        content: Text("Would you like AI to suggest maintenance tasks for your ${car.name}?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("No thanks"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                isDismissible: false,
+                shape: const RoundedRectangleBorder(
+                  borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                builder: (_) => AISuggestionsSheet(car: car),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("Let's go!"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -137,7 +185,16 @@ class CarListScreenState extends State<CarListScreen> {
         foregroundColor: colorScheme.onPrimary,
         onPressed: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const CarFormScreen()),
+          MaterialPageRoute(
+            builder: (_) => CarFormScreen(
+              onCarAdded: (newCar) {
+                showTopSnackBar(context, "${newCar.name} added successfully");
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _showAISuggestionsDialog(context, newCar);
+                });
+                },
+            ),
+          ),
         ),
         child: const Icon(Icons.add_rounded),
       ),

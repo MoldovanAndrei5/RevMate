@@ -9,7 +9,7 @@ import 'package:car_maintenance_tracker/screens/other/stats_screen.dart';
 import 'package:car_maintenance_tracker/services/api_transfer_service.dart';
 import 'package:car_maintenance_tracker/utils/api_exception.dart';
 import 'package:car_maintenance_tracker/utils/connectivity_state.dart';
-import 'package:car_maintenance_tracker/utils/snack_bar_helper.dart';
+import 'package:car_maintenance_tracker/widgets/top_snack_bar.dart';
 import 'package:car_maintenance_tracker/widgets/bottom_navbar_widget.dart';
 import 'package:car_maintenance_tracker/widgets/sync_indicator.dart';
 import 'package:flutter/material.dart';
@@ -61,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
       await context.read<CarProvider>().fetchCars();
+      await context.read<TaskProvider>().fetchTasks();
     } on ApiException catch (_) {
       if (mounted) {
         showTopSnackBar(context, "No internet connection", type: SnackBarType.error);
@@ -74,7 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await _transferService.acceptTransfer(transfer.transferUuid);
       setState(() => _incoming.removeWhere((t) => t.transferUuid == transfer.transferUuid));
-      await context.read<CarProvider>().fetchCars();
+      await _loadTransfers();
       if (mounted) {
         showTopSnackBar(context, "${transfer.carName} was transferred to you!");
       }

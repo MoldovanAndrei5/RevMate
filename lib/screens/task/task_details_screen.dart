@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:car_maintenance_tracker/utils/api_exception.dart';
-import 'package:car_maintenance_tracker/utils/snack_bar_helper.dart';
+import 'package:car_maintenance_tracker/widgets/top_snack_bar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:car_maintenance_tracker/models/invoice.dart';
 import 'package:car_maintenance_tracker/providers/task_provider.dart';
@@ -171,6 +171,34 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       if (mounted) {
         showTopSnackBar(context, e.message, type: SnackBarType.error);
       }
+    }
+  }
+
+  Future<void> _deleteTask() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete task"),
+        content: const Text("Are you sure you want to delete this task?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    await context.read<TaskProvider>().deleteTask(widget.taskUuid);
+    if (mounted) {
+      showTopSnackBar(context, 'Task deleted successfully');
+      Navigator.of(context).pop();
     }
   }
 
@@ -632,34 +660,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text("Delete task"),
-                        content: const Text("Are you sure you want to delete this task?"),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text("Cancel"),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            style: TextButton.styleFrom(foregroundColor: Colors.red),
-                            child: const Text("Delete"),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed == true && mounted) {
-                      final navigator = Navigator.of(context);
-                      await context.read<TaskProvider>().deleteTask(widget.taskUuid);
-                      if (navigator.canPop()) {
-                        showTopSnackBar(navigator.context, 'Task deleted successfully');
-                        navigator.pop();
-                      }
-                    }
-                  },
+                  onPressed: _deleteTask,
                   icon: const Icon(Icons.delete_outline, size: 18),
                   label: const Text("Delete"),
                   style: OutlinedButton.styleFrom(

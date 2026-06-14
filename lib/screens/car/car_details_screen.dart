@@ -8,7 +8,7 @@ import 'package:car_maintenance_tracker/screens/car/car_form_screen.dart';
 import 'package:car_maintenance_tracker/screens/task/task_form_screen.dart';
 import 'package:car_maintenance_tracker/services/api_car_service.dart';
 import 'package:car_maintenance_tracker/utils/api_exception.dart';
-import 'package:car_maintenance_tracker/utils/snack_bar_helper.dart';
+import 'package:car_maintenance_tracker/widgets/top_snack_bar.dart';
 import 'package:car_maintenance_tracker/utils/sort_filter_enums.dart';
 import 'package:car_maintenance_tracker/widgets/bottom_navbar_widget.dart';
 import 'package:car_maintenance_tracker/widgets/task_item.dart';
